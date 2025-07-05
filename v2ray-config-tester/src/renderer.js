@@ -509,88 +509,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     function addEventListeners() {
+        const safelyAddEventListener = (selector, event, handler, queryAll = false) => {
+            try {
+                if (queryAll) {
+                    const elements = $$(selector);
+                    if (elements && elements.length > 0) {
+                        elements.forEach(el => el.addEventListener(event, handler));
+                    } else {
+                        console.warn(`No elements found for selector '${selector}' to attach event listeners.`);
+                    }
+                } else {
+                    const element = $(selector);
+                    if (element) {
+                        element.addEventListener(event, handler);
+                    } else {
+                        console.warn(`Element not found for selector '${selector}' to attach event listener.`);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error attaching event listener to ${selector}:`, error);
+            }
+        };
+
         // Toolbar buttons
-        $('#openAddModalBtn').addEventListener('click', () => openModal('addConfigModal'));
-        $('#deleteUnhealthyBtn').addEventListener('click', handleDeleteUnhealthy);
-        $('#startTestBtn').addEventListener('click', handleStartTest);
-        $('#stopTestBtn').addEventListener('click', () => window.api.stopTests());
+        safelyAddEventListener('#openAddModalBtn', 'click', () => openModal('addConfigModal'));
+        safelyAddEventListener('#deleteUnhealthyBtn', 'click', handleDeleteUnhealthy);
+        safelyAddEventListener('#startTestBtn', 'click', handleStartTest);
+        safelyAddEventListener('#stopTestBtn', 'click', () => window.api.stopTests());
 
         // Search
-        $('#searchBox').addEventListener('input', handleSearch); // Corrected ID: searchBox
+        safelyAddEventListener('#searchBox', 'input', handleSearch);
 
         // Sidebar
-        $('#addGroupBtn').addEventListener('click', handleAddGroup); // Corrected ID: addGroupBtn
-        $('#groupList').addEventListener('click', handleGroupClick);
+        safelyAddEventListener('#addGroupBtn', 'click', handleAddGroup);
+        safelyAddEventListener('#groupList', 'click', handleGroupClick);
 
         // Main table
-        $('#configsTableBody').addEventListener('click', handleTableClick);
-        $('#configsTableBody').addEventListener('contextmenu', handleTableContextMenu);
-        $$('#configsTable th[data-sort]').forEach(th => th.addEventListener('click', handleSortClick)); // Corrected $ to $$
-        $('#selectAllCheckbox').addEventListener('change', handleSelectAllToggle);
-
+        safelyAddEventListener('#configsTableBody', 'click', handleTableClick);
+        safelyAddEventListener('#configsTableBody', 'contextmenu', handleTableContextMenu);
+        safelyAddEventListener('#configsTable th[data-sort]', 'click', handleSortClick, true); // queryAll = true
+        safelyAddEventListener('#selectAllCheckbox', 'change', handleSelectAllToggle);
 
         // Status bar
-        $('#connectBtn').addEventListener('click', handleConnectToggle);
-        $('#settingsBtn').addEventListener('click', () => openModal('settingsModal'));
-        $('#themeToggleBtn').addEventListener('click', () => { // Corrected ID: themeToggleBtn
+        safelyAddEventListener('#connectBtn', 'click', handleConnectToggle);
+        safelyAddEventListener('#settingsBtn', 'click', () => openModal('settingsModal'));
+        safelyAddEventListener('#themeToggleBtn', 'click', () => {
             state.currentTheme = state.currentTheme === 'dark-theme' ? 'light-theme' : 'dark-theme';
             document.body.className = state.currentTheme;
             localStorage.setItem('theme', state.currentTheme);
-            // Update icon on theme toggle btn
             const icon = $('#themeToggleBtn i');
             if (icon) icon.className = state.currentTheme === 'dark-theme' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
         });
-        $('#langToggleBtn').addEventListener('click', () => { // Corrected ID: langToggleBtn
+        safelyAddEventListener('#langToggleBtn', 'click', () => {
             state.currentLanguage = state.currentLanguage === 'en' ? 'fa' : 'en';
             updateLangUI();
             renderAll();
         });
 
         // Settings Modal Buttons
-        // Removed listener for non-existent #saveSettingsBtn. Saving is now part of individual actions or modal close.
-        // The inputs #concurrentTestsInput, #testTimeoutInput, #testUrlInput are read in handleSaveSettings which needs to be triggered appropriately.
-        // Let's assume for now that settings are saved implicitly when the modal is closed or explicitly by a different button.
-        // For now, I will ensure handleSaveSettings is callable and correctly reads values.
-        // If there's a generic "OK" or "Apply" button for settings modal, it should call handleSaveSettings.
-        // The current settings modal in HTML doesn't have a general save/apply button, only data action buttons.
-        // Let's add a listener to the settings modal's close button as a *proxy* for saving. This is not ideal UX but fixes the missing link.
-        // TODO: This will be changed later in UX improvements for settings modal.
-        // $$('.close-modal-btn[data-modal-id="settingsModal"]').forEach(btn => btn.addEventListener('click', handleSaveSettings)); // Save on close
-        // Settings Modal new buttons
-        $('#saveSettingsBtn').addEventListener('click', () => {
-            handleSaveSettings(); // Saves the settings
-            closeModal(); // Then closes the modal
+        safelyAddEventListener('#saveSettingsBtn', 'click', () => {
+            handleSaveSettings();
+            closeModal();
         });
-        $('#cancelSettingsBtn').addEventListener('click', () => {
-            // Restore original settings values to inputs before closing if they were changed without saving
-            // This is optional, but good UX. For simplicity here, just close.
+        safelyAddEventListener('#cancelSettingsBtn', 'click', () => {
             closeModal();
         });
 
-
-        $('#importDataBtn').addEventListener('click', handleImportData);
-        $('#exportDataBtn').addEventListener('click', handleExportData);
-        $('#exportHealthyBtn').addEventListener('click', () => { // Export healthy configs as text
+        safelyAddEventListener('#importDataBtn', 'click', handleImportData);
+        safelyAddEventListener('#exportDataBtn', 'click', handleExportData);
+        safelyAddEventListener('#exportHealthyBtn', 'click', () => {
             const healthyConfigs = state.configs.filter(c => c.status === 'healthy');
             handleExportConfigs(healthyConfigs, 'healthy-configs.txt');
         });
-        $('#clearAllDataBtn').addEventListener('click', handleClearAllData);
-
+        safelyAddEventListener('#clearAllDataBtn', 'click', handleClearAllData);
 
         // Add Config Modal Buttons
-        $('#addFromSubLinkBtn').addEventListener('click', handleFetchSubscription); // Corrected ID
-        $('#addFromPasteBtn').addEventListener('click', handleAddConfigFromText); // Corrected ID
-        $('#addFromFileBtn').addEventListener('click', handleImportTextFile); // Corrected ID
+        safelyAddEventListener('#addFromSubLinkBtn', 'click', handleFetchSubscription);
+        safelyAddEventListener('#addFromPasteBtn', 'click', handleAddConfigFromText);
+        safelyAddEventListener('#addFromFileBtn', 'click', handleImportTextFile);
 
         // Modals general close buttons
-        // This selector targets all buttons with 'close-modal-btn' class and the modal backdrop
-        $$('.close-modal-btn, #modalBackdrop').forEach(el => {
-            el.addEventListener('click', closeModal);
-        });
+        safelyAddEventListener('.close-modal-btn, #modalBackdrop', 'click', closeModal, true); // queryAll = true
+
         // Specific cancel buttons for confirm/prompt modals also just close.
-        // These might be redundant if they also have 'close-modal-btn' class, but explicit is fine.
-        $('#confirmCancelBtn').addEventListener('click', closeModal);
-        $('#promptCancelBtn').addEventListener('click', closeModal);
+        safelyAddEventListener('#confirmCancelBtn', 'click', closeModal);
+        safelyAddEventListener('#promptCancelBtn', 'click', closeModal);
 
         // For export buttons that were previously conceptual:
         // These are just examples, assuming such buttons exist with these IDs.
