@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
         en: {
             groups: "Groups", all_configs: "All Configs", add_config: "Add Config", delete_unhealthy: "Delete Unhealthy",
             start_test: "Start Test", stop_test: "Stop Test", status: "Status", name: "Name", group: "Group", country: "Country",
-            protocol: "Protocol", network: "Network", delay: "Delay", connect: "Connect", disconnect: "Disconnect",
+            protocol: "Protocol", network: "Network", delay: "Delay", details: "Details", connect: "Connect", disconnect: "Disconnect",
             not_connected: "Not Connected", connecting: "Connecting...", connected_to: "Connected to", settings: "Settings",
             untested: "Untested", testing: "Testing", healthy: "Healthy", unhealthy: "Unhealthy", error: "Error",
             test_selected: "Test Selected", copy_link: "Copy Link", assign_to_group: "Assign to Group",
@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
             start_test: "شروع تست", stop_test: "توقف تست", status: "وضعیت", name: "نام", group: "گروه", country: "کشور",
-            protocol: "پروتکل", network: "شبکه", delay: "تأخیر", connect: "اتصال", disconnect: "قطع اتصال",
+            protocol: "پروتکل", network: "شبکه", delay: "تأخیر", details: "جزئیات", connect: "اتصال", disconnect: "قطع اتصال",
             not_connected: "متصل نیستید", connecting: "در حال اتصال...", connected_to: "متصل به", settings: "تنظیمات",
             untested: "تست نشده", testing: "در حال تست", healthy: "سالم", unhealthy: "ناسالم", error: "خطا",
             test_selected: "تست منتخب‌ها", copy_link: "کپی لینک", assign_to_group: "اختصاص به گروه",
@@ -69,6 +69,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return 'N/A';
         }
         return `${delayValue} ms`;
+    };
+
+    const formatDetails = (config) => {
+        const parts = [];
+        if (config.networkType) parts.push(`Net: ${config.networkType}`);
+        if (config.security) parts.push(`Sec: ${config.security}`);
+        if (config.sni) parts.push(`SNI: ${config.sni}`);
+        if (config.fp) parts.push(`FP: ${config.fp}`);
+        if (config.path) parts.push(`Path: ${config.path}`);
+        if (config.serviceName) parts.push(`Svc: ${config.serviceName}`);
+        // Add more details as needed, e.g., flow, encryption for VLESS, method for SS
+        if (config.protocol === 'vless') {
+            if (config.encryption && config.encryption !== 'none') parts.push(`Enc: ${config.encryption}`);
+            if (config.flow) parts.push(`Flow: ${config.flow}`);
+        } else if (config.protocol === 'ss') {
+            if (config.method) parts.push(`Method: ${config.method}`);
+        }
+
+        let detailsStr = parts.join(', ');
+        if (detailsStr.length > 30) { // Simple truncation for display
+            detailsStr = detailsStr.substring(0, 27) + '...';
+        }
+        return detailsStr;
     };
 
     // --- Initialization ---
@@ -103,12 +126,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderTable = () => {
         const tableBody = $('#configsTableBody');
         const configsToRender = getVisibleConfigs();
+        const colspanValue = 8; // 7 original columns + 1 for Details
 
         if (configsToRender.length === 0 && state.searchTerm === '' && state.activeGroupId === 'all') {
-            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px;">No configurations added yet. Click "Add Config" or "Import".</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="${colspanValue}" style="text-align: center; padding: 40px;">No configurations added yet. Click "Add Config" or "Import".</td></tr>`;
             return;
         } else if (configsToRender.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px;">No configurations match the current filter or search term.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="${colspanValue}" style="text-align: center; padding: 40px;">No configurations match the current filter or search term.</td></tr>`;
             return;
         }
 
@@ -181,7 +205,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 cells[4].textContent = formatDelay(config.delay);
                 cells[5].textContent = config.protocol;
-                cells[6].textContent = config.network;
+                cells[6].textContent = config.network; // This is the general network type (tcp, ws, grpc)
+                cells[7].textContent = formatDetails(config); // New Details cell
+                cells[7].title = formatDetails(config); // Set title for full details on hover
 
                 existingRowsById.delete(config.id); // Remove from map as it's been processed
             } else { // Row doesn't exist, create it
@@ -198,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${formatDelay(config.delay)}</td>
                     <td>${config.protocol}</td>
                     <td>${config.network}</td>
+                    <td title="${formatDetails(config)}">${formatDetails(config)}</td>
                 `;
                 fragmentForNewRows.appendChild(row); // Add to fragment for new rows
             }
@@ -331,14 +358,53 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.warn(`Failed to get country for ${url.hostname}:`, countryError.message);
                     // Use default 'XX' and proceed
                 }
+
+                // Extract details for the new "Details" column
+                const protocolName = url.protocol.slice(0, -1).toLowerCase();
+                const searchParams = url.searchParams;
+
+                const configDetails = {
+                    port: url.port,
+                    networkType: searchParams.get('type') || (protocolName === 'vmess' ? 'tcp' : 'tcp'), // vmess might have 'net' in JSON
+                    security: searchParams.get('security') || 'none',
+                    sni: searchParams.get('sni') || searchParams.get('host') || '',
+                    fp: searchParams.get('fp') || '',
+                    path: searchParams.get('path') || '',
+                    serviceName: searchParams.get('serviceName') || '',
+                    encryption: searchParams.get('encryption') || '', // VLESS
+                    flow: searchParams.get('flow') || '',             // VLESS
+                    // Note: For VMess, many details (like 'net', 'tls', 'sni', 'path') are in the base64 part.
+                    // For SS, method is part of the userinfo.
+                    // This simple extraction here is a baseline. True detailed parsing still relies on main.js::parseConfigLink.
+                    // We are adding what's easily available from URL for display purposes.
+                };
+                 if (protocolName === 'vmess') { // VMess often has details in fragment or needs base64 decode
+                    // A proper solution would be an IPC call to main process's parseConfigLink to get full details.
+                    // For now, we'll rely on what's in searchParams or make educated guesses.
+                    configDetails.networkType = searchParams.get('type') || searchParams.get('net') || 'tcp';
+                    if (searchParams.get('tls') === 'tls') configDetails.security = 'tls';
+                }
+
+
                 state.configs.push({
                     id: `cfg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     link, name, country,
                     address: url.hostname,
-                    protocol: url.protocol.slice(0, -1),
-                    network: url.searchParams.get('type') || 'tcp',
+                    protocol: protocolName,
+                    // 'network' is used for the table column, 'networkType' for details to avoid conflict
+                    network: configDetails.networkType, // Keep existing 'network' field for direct display
                     status: 'untested', delay: null,
-                    groupId: state.activeGroupId === 'all' ? null : state.activeGroupId
+                    groupId: state.activeGroupId === 'all' ? null : state.activeGroupId,
+                    // Store extracted details
+                    port: configDetails.port,
+                    security: configDetails.security,
+                    sni: configDetails.sni,
+                    fp: configDetails.fp,
+                    path: configDetails.path,
+                    serviceName: configDetails.serviceName,
+                    encryption: configDetails.encryption, // VLESS specific
+                    flow: configDetails.flow,             // VLESS specific
+                    // method: extractedMethodForSS, // SS specific, harder to get from URL without full parsing
                 });
                 existingLinks.add(link);
                 addedCount++;
@@ -517,11 +583,12 @@ document.addEventListener('DOMContentLoaded', () => {
         $('#addFromFileBtn').addEventListener('click', handleImportTextFile); // Corrected ID
 
         // Modals general close buttons
-        $$('.modal .close-btn, #modalBackdrop').forEach(el => {
-            if (!el.classList.contains('close-modal-btn') || el.dataset.modalId !== 'settingsModal') { // Avoid double-binding save for settings close
-                el.addEventListener('click', closeModal);
-            }
+        // This selector targets all buttons with 'close-modal-btn' class and the modal backdrop
+        $$('.close-modal-btn, #modalBackdrop').forEach(el => {
+            el.addEventListener('click', closeModal);
         });
+        // Specific cancel buttons for confirm/prompt modals also just close.
+        // These might be redundant if they also have 'close-modal-btn' class, but explicit is fine.
         $('#confirmCancelBtn').addEventListener('click', closeModal);
         $('#promptCancelBtn').addEventListener('click', closeModal);
 
