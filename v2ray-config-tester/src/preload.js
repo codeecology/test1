@@ -30,4 +30,6 @@ contextBridge.exposeInMainWorld('api', {
     onProxyStatusChange: (callback) => ipcRenderer.on('proxy:status', (_event, ...args) => callback(...args)),
     // FEATURE: Live Ping (Idea #2)
     onProxyLivePingResult: (callback) => ipcRenderer.on('proxy:live-ping-result', (_event, ...args) => callback(...args)),
+    // FEATURE: Config Details Panel (Idea #7)
+    getFullConfigDetails: (link) => ipcRenderer.invoke('config:get-full-details', link),
 });

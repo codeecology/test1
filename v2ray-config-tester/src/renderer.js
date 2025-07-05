@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchTerm: '',
         currentLanguage: 'fa',
         currentTheme: 'dark-theme',
+        activeDetailConfigId: null, // For Config Details Panel
+        lastTestCompletionTime: null, // For Dashboard (Feature 1)
     };
 
     // --- DOM Elements ---
@@ -47,6 +49,51 @@ document.addEventListener('DOMContentLoaded', () => {
             assign_to_new_group: "New Group...", // New
             ungroup_config: "Ungroup", // New
             port: "Port", // New
+            // For Details Panel (Feature 7)
+            config_details_title: "Config Details",
+            select_config_to_view_details: "Select a config to view its details.",
+            detail_name: "Name",
+            detail_address: "Address",
+            detail_port: "Port",
+            detail_id_user: "ID/User",
+            detail_password: "Password",
+            detail_protocol: "Protocol",
+            detail_network: "Network",
+            detail_security: "Security",
+            detail_tls_settings: "TLS Settings",
+            detail_sni: "SNI (Server Name)",
+            detail_alpn: "ALPN",
+            detail_fingerprint: "TLS Fingerprint (fp)",
+            detail_allow_insecure: "Allow Insecure",
+            detail_ws_settings: "WebSocket Settings",
+            detail_ws_path: "Path",
+            detail_ws_host: "Host Header",
+            detail_grpc_settings: "gRPC Settings",
+            detail_service_name: "Service Name",
+            detail_multi_mode: "Multi Mode",
+            detail_kcp_settings: "KCP Settings",
+            detail_header_type: "Header Type",
+            detail_seed: "Seed",
+            detail_quic_settings: "QUIC Settings",
+            detail_quic_security: "QUIC Security",
+            detail_quic_key: "QUIC Key",
+            detail_ss_method: "Encryption Method",
+            detail_flow: "Flow",
+            detail_encryption: "Encryption (VLESS)",
+            detail_xtls_settings: "XTLS Settings",
+            detail_full_link: "Full Config Link",
+            yes: "Yes",
+            no: "No",
+            // For Dashboard (Feature 1) - English
+            db_total_configs_title: "Total Configs",
+            db_healthy_configs_title: "Healthy Configs",
+            db_last_test_time_title: "Last Test",
+            db_connection_status_title: "Connection Status",
+            never: "Never",
+            moments_ago: "Moments ago",
+            minutes_ago: "minutes ago",
+            hours_ago: "hours ago",
+            yesterday: "Yesterday",
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -67,6 +114,58 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_configs_added: "کانفیگ جدید اضافه شد.",
             assign_to_new_group: "گروه جدید...", // New
             ungroup_config: "بدون گروه", // New
+            // For Details Panel (Feature 7) - Farsi
+            config_details_title: "جزئیات کانفیگ",
+            select_config_to_view_details: "یک کانفیگ را برای مشاهده جزئیات انتخاب کنید.",
+            detail_name: "نام",
+            detail_address: "آدرس",
+            detail_port: "پورت",
+            detail_id_user: "شناسه/کاربر",
+            detail_password: "رمز عبور",
+            detail_protocol: "پروتکل",
+            detail_network: "شبکه",
+            detail_security: "امنیت",
+            detail_tls_settings: "تنظیمات TLS",
+            detail_sni: "SNI (نام سرور)",
+            detail_alpn: "ALPN",
+            detail_fingerprint: "اثر انگشت TLS (fp)",
+            detail_allow_insecure: "Allow Insecure",
+            detail_ws_settings: "تنظیمات WebSocket",
+            detail_ws_path: "مسیر",
+            detail_ws_host: "هدر Host",
+            detail_grpc_settings: "تنظیمات gRPC",
+            detail_service_name: "نام سرویس",
+            detail_multi_mode: "حالت چندگانه",
+            detail_kcp_settings: "تنظیمات KCP",
+            detail_header_type: "نوع هدر",
+            detail_seed: "Seed",
+            detail_quic_settings: "تنظیمات QUIC",
+            detail_quic_security: "امنیت QUIC",
+            detail_quic_key: "کلید QUIC",
+            detail_ss_method: "متد رمزنگاری",
+            detail_flow: "Flow",
+            detail_encryption: "رمزنگاری (VLESS)",
+            detail_xtls_settings: "تنظیمات XTLS",
+            detail_full_link: "لینک کامل کانفیگ",
+            yes: "بله",
+            no: "خیر",
+            loading_details: "در حال بارگذاری جزئیات...",
+            error_fetching_details: "خطا در دریافت جزئیات",
+            error_config_not_found: "کانفیگ یافت نشد",
+            detail_alter_id: "Alter ID",
+            detail_security_vmess: "رمزنگاری (VMess)",
+            detail_xtls_settings_shortid: "شناسه کوتاه (XTLS/REALITY)",
+            detail_xtls_settings_publickey: "کلید عمومی (XTLS/REALITY)",
+            // For Dashboard (Feature 1) - Farsi
+            db_total_configs_title: "تعداد کل کانفیگ‌ها",
+            db_healthy_configs_title: "کانفیگ‌های سالم",
+            db_last_test_time_title: "آخرین تست",
+            db_connection_status_title: "وضعیت اتصال",
+            never: "هرگز", // For last test time if never run
+            moments_ago: "لحظاتی پیش",
+            minutes_ago: "دقیقه پیش",
+            hours_ago: "ساعت پیش",
+            yesterday: "دیروز",
         }
     };
     const lang = (key) => translations[state.currentLanguage]?.[key] || key;
@@ -122,19 +221,82 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         state.currentTheme = localStorage.getItem('theme') || 'dark-theme';
         document.body.className = state.currentTheme;
+        // Retrieve last test time from loaded settings
+        if (state.settings && state.settings.lastTestCompletionTime) {
+            state.lastTestCompletionTime = state.settings.lastTestCompletionTime;
+        }
         addEventListeners();
         renderAll();
+        updateDashboard(); // Initial dashboard update
     };
 
     // --- Render Functions ---
     const renderAll = () => {
         renderTable();
         renderGroups();
-        updateStatusBar();
-        updateConnectionButton();
+        updateStatusBar(); // This updates the general status bar text
+        updateConnectionButton(); // This updates the connect/disconnect button and its text
         updateTestUI();
         updateLangUI();
+        // Note: updateDashboard() is called separately when specific data changes
     };
+
+    const updateDashboard = () => {
+        const dbTotalConfigs = $('#dbTotalConfigs');
+        const dbHealthyConfigs = $('#dbHealthyConfigs');
+        const dbLastTestTime = $('#dbLastTestTime');
+        const dbConnectionStatus = $('#dbConnectionStatus');
+
+        if (dbTotalConfigs) dbTotalConfigs.textContent = state.configs.length;
+
+        if (dbHealthyConfigs) dbHealthyConfigs.textContent = state.configs.filter(c => c.status === 'healthy').length;
+
+        if (dbLastTestTime) {
+            if (state.lastTestCompletionTime) {
+                const now = new Date();
+                const lastTest = new Date(state.lastTestCompletionTime);
+                const diffMs = now - lastTest;
+                const diffSecs = Math.round(diffMs / 1000);
+                const diffMins = Math.round(diffSecs / 60);
+                const diffHours = Math.round(diffMins / 60);
+
+                if (diffSecs < 60) {
+                    dbLastTestTime.textContent = lang('moments_ago');
+                } else if (diffMins < 60) {
+                    dbLastTestTime.textContent = `${diffMins} ${lang('minutes_ago')}`;
+                } else if (diffHours < 24) {
+                    dbLastTestTime.textContent = `${diffHours} ${lang('hours_ago')}`;
+                } else if (diffHours < 48) {
+                    dbLastTestTime.textContent = lang('yesterday');
+                } else {
+                    dbLastTestTime.textContent = lastTest.toLocaleDateString();
+                }
+            } else {
+                dbLastTestTime.textContent = lang('never');
+            }
+        }
+
+        if (dbConnectionStatus) {
+            if (state.activeConnectionId) {
+                const config = state.configs.find(c => c.id === state.activeConnectionId);
+                dbConnectionStatus.textContent = `${lang('connected_to')} ${config?.name || 'Unknown'}`;
+                // Change icon color on dashboard stat for connection
+                const iconEl = dbConnectionStatus.closest('.dashboard-stat')?.querySelector('.stat-icon i');
+                const statBox = dbConnectionStatus.closest('.dashboard-stat');
+                if(iconEl) iconEl.style.color = 'var(--success-color)';
+                if(statBox) statBox.style.borderColor = 'var(--success-color)';
+
+
+            } else {
+                dbConnectionStatus.textContent = lang('not_connected');
+                const iconEl = dbConnectionStatus.closest('.dashboard-stat')?.querySelector('.stat-icon i');
+                const statBox = dbConnectionStatus.closest('.dashboard-stat');
+                if(iconEl) iconEl.style.color = 'var(--disconnected-color)';
+                if(statBox) statBox.style.borderColor = 'var(--disconnected-color)';
+            }
+        }
+    };
+
 
     const renderTable = () => {
         const tableBody = $('#configsTableBody');
@@ -213,8 +375,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 cells[2].textContent = config.name;
                 cells[2].title = config.name;
 
-                const countryCellContent = `${countryFlag}<span>${config.country || ''}</span>`;
-                if (cells[3].innerHTML !== countryCellContent) cells[3].innerHTML = countryCellContent;
+                // Country cell update - more granular to avoid broken img for 'XX'
+                const countryCell = cells[3];
+                const existingImg = countryCell.querySelector('img.country-flag');
+                const existingSpan = countryCell.querySelector('span');
+
+                if (config.country && config.country.toUpperCase() !== 'XX') {
+                    if (existingImg) {
+                        const newSrc = `https://flagcdn.com/${config.country.toLowerCase()}.svg`;
+                        if (existingImg.src !== newSrc) existingImg.src = newSrc;
+                        existingImg.alt = config.country;
+                        existingImg.style.display = '';
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = `https://flagcdn.com/${config.country.toLowerCase()}.svg`;
+                        img.alt = config.country;
+                        img.className = 'country-flag';
+                        countryCell.prepend(img); // Prepend to keep order if span exists
+                    }
+                    if (existingSpan) existingSpan.textContent = config.country;
+                    else { // Create span if not exists
+                        const span = document.createElement('span');
+                        span.textContent = config.country;
+                        countryCell.appendChild(span);
+                    }
+                } else { // 'XX' or no country
+                    if (existingImg) existingImg.style.display = 'none';
+                    if (existingSpan) existingSpan.textContent = config.country || ''; // Display 'XX' or empty
+                    else { // Create span if not exists
+                        const span = document.createElement('span');
+                        span.textContent = config.country || '';
+                        countryCell.appendChild(span);
+                    }
+                }
 
                 cells[4].textContent = formatDelay(config.delay);
                 cells[5].textContent = config.protocol;
@@ -459,13 +652,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (addedCount > 0) {
             saveAllData();
-            renderAll(); // renderAll -> renderTable -> updateSelectAllCheckboxState
+            renderAll();
+            updateDashboard(); // Update dashboard after adding configs
             showToast(`${addedCount} ${lang('toast_configs_added')}`, 'success');
         }
     };
 
     const saveAllData = () => {
-        window.api.saveAllData({ configs: state.configs, groups: state.groups, settings: state.settings });
+        // Persist lastTestCompletionTime with other settings
+        const settingsToSave = {
+            ...state.settings,
+            lastTestCompletionTime: state.lastTestCompletionTime
+        };
+        window.api.saveAllData({ configs: state.configs, groups: state.groups, settings: settingsToSave });
     };
 
     // --- Modals, Toasts, Context Menu ---
@@ -625,11 +824,44 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const showToast = (message, type = 'info') => {
         const toastContainer = $('#toastContainer');
+        if (!toastContainer) {
+            console.error('Toast container #toastContainer not found.');
+            // Fallback to console if toast system is broken
+            console.log(`Toast (${type}): ${message}`);
+            return;
+        }
         const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
+        toast.className = `toast ${type}`; // e.g., toast info, toast success
         toast.textContent = message;
+
+        // Add an icon based on type for better visual feedback
+        const icon = document.createElement('i');
+        const iconClasses = {
+            success: 'fa-solid fa-check-circle',
+            error: 'fa-solid fa-times-circle',
+            info: 'fa-solid fa-info-circle',
+            warning: 'fa-solid fa-exclamation-triangle'
+        };
+        icon.className = iconClasses[type] || iconClasses.info; // Default to info icon
+        toast.prepend(icon); // Add icon before the message
+
         toastContainer.appendChild(toast);
-        setTimeout(() => toast.remove(), 5000);
+
+        // Trigger animation
+        requestAnimationFrame(() => {
+            toast.classList.add('show');
+        });
+
+        // Set timeout to remove the toast
+        setTimeout(() => {
+            toast.classList.remove('show');
+            // Wait for fade out animation to complete before removing from DOM
+            toast.addEventListener('transitionend', () => {
+                if (toast.parentElement) { // Check if still in DOM
+                    toast.remove();
+                }
+            }, { once: true }); // Important: Use once to prevent multiple removals if transitionend fires multiple times
+        }, 4600); // Start fade-out slightly before 5s total lifetime
     };
 
     const showConfirm = ({ title, message, okText = 'تایید', cancelText = 'لغو' }) => {
@@ -724,6 +956,154 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    // --- Config Details Panel Logic (Feature 7) ---
+    const showDetailsPanel = async (configId) => {
+        const config = state.configs.find(c => c.id === configId);
+        if (!config) {
+            showToast(lang('error_config_not_found') || 'Config not found.', 'error');
+            return;
+        }
+
+        // If panel is already open for this config, optionally toggle or do nothing. For now, just re-fetch and show.
+        // if ($('#configDetailsPanel').classList.contains('open') && state.activeDetailConfigId === configId) {
+        //     closeDetailsPanel();
+        //     return;
+        // }
+
+        showToast(lang('loading_details') || 'Loading details...', 'info'); // Add translation
+        try {
+            const result = await window.api.getFullConfigDetails(config.link);
+            if (result.success) {
+                populateDetailsPanel(result.details, config); // Pass original config for name, link etc.
+                $('#configDetailsPanel').classList.add('open');
+                state.activeDetailConfigId = configId;
+            } else {
+                throw new Error(result.error || 'Failed to get config details.');
+            }
+        } catch (error) {
+            console.error("Error fetching full config details:", error);
+            showToast(`${lang('error_fetching_details') || 'Error fetching details'}: ${error.message}`, 'error'); // Add translation
+            closeDetailsPanel(); // Close if it was trying to open, or clear if already open
+        }
+    };
+
+    const closeDetailsPanel = () => {
+        $('#configDetailsPanel').classList.remove('open');
+        state.activeDetailConfigId = null;
+        // Optionally, clear content after animation or revert to placeholder
+        setTimeout(() => {
+            if (!$('#configDetailsPanel').classList.contains('open')) { // Check if still closed
+                const panelBody = $('#configDetailsBody');
+                panelBody.innerHTML = `<p class="empty-state" data-lang="select_config_to_view_details">${lang('select_config_to_view_details')}</p>`;
+            }
+        }, 300); // Match CSS transition duration
+    };
+
+    const populateDetailsPanel = (details, originalConfig) => {
+        const panelBody = $('#configDetailsBody');
+        panelBody.innerHTML = ''; // Clear previous content or placeholder
+
+        const addDetail = (labelKey, value, isLong = false) => {
+            if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+                return; // Don't display empty fields
+            }
+            const item = document.createElement('div');
+            item.className = 'detail-item';
+
+            const label = document.createElement('div');
+            label.className = 'detail-label';
+            label.textContent = lang(labelKey) || labelKey.replace(/_/g, ' ');
+
+            const valueDiv = document.createElement('div');
+            valueDiv.className = 'detail-value';
+            if (typeof value === 'boolean') {
+                valueDiv.textContent = value ? lang('yes') : lang('no');
+            } else if (Array.isArray(value)) {
+                valueDiv.textContent = value.join(', ');
+            } else {
+                valueDiv.textContent = value;
+            }
+
+            if (isLong) valueDiv.classList.add('long');
+
+            item.appendChild(label);
+            item.appendChild(valueDiv);
+            panelBody.appendChild(item);
+        };
+
+        // Basic Info from originalConfig (already in renderer)
+        addDetail('detail_name', originalConfig.name);
+        addDetail('detail_protocol', details.protocol); // From full details
+        addDetail('detail_address', originalConfig.address);
+        addDetail('detail_port', originalConfig.portToDisplay);
+
+        // Protocol Specific Settings (from details.settings)
+        if (details.settings) {
+            if (details.protocol === 'vless' && details.settings.vnext && details.settings.vnext[0]) {
+                const vnext = details.settings.vnext[0];
+                if (vnext.users && vnext.users[0]) {
+                    addDetail('detail_id_user', vnext.users[0].id);
+                    addDetail('detail_encryption', vnext.users[0].encryption);
+                    addDetail('detail_flow', vnext.users[0].flow);
+                }
+            } else if (details.protocol === 'vmess' && details.settings.vnext && details.settings.vnext[0]) {
+                const vnext = details.settings.vnext[0];
+                if (vnext.users && vnext.users[0]) {
+                    addDetail('detail_id_user', vnext.users[0].id);
+                    addDetail('detail_alter_id', vnext.users[0].alterId); // Add lang key
+                    addDetail('detail_security_vmess', vnext.users[0].security); // Add lang key e.g. "Cipher (VMess)"
+                }
+            } else if (details.protocol === 'trojan' && details.settings.servers && details.settings.servers[0]) {
+                addDetail('detail_password', details.settings.servers[0].password);
+            } else if (details.protocol === 'ss' && details.settings.servers && details.settings.servers[0]) {
+                addDetail('detail_ss_method', details.settings.servers[0].method);
+                addDetail('detail_password', details.settings.servers[0].password);
+            }
+        }
+
+        // Stream Settings (from details.streamSettings)
+        if (details.streamSettings) {
+            addDetail('detail_network', details.streamSettings.network);
+            addDetail('detail_security', details.streamSettings.security);
+
+            if (details.streamSettings.security === 'tls' || details.streamSettings.security === 'xtls') {
+                const tlsSettings = details.streamSettings.tlsSettings || {};
+                addDetail('detail_sni', tlsSettings.serverName);
+                addDetail('detail_alpn', tlsSettings.alpn); // Will be displayed as comma-separated string if array
+                addDetail('detail_fingerprint', tlsSettings.fingerprint);
+                addDetail('detail_allow_insecure', typeof tlsSettings.allowInsecure === 'boolean' ? tlsSettings.allowInsecure : undefined);
+                // TODO: Add publicKey, shortId if present
+            }
+             if (details.streamSettings.security === 'xtls') { // XTLS specific on top of TLS
+                const realitySettings = details.streamSettings.realitySettings || {}; // If XTLS uses REALITY
+                addDetail('detail_xtls_settings_shortid', realitySettings.shortId); // Add lang key
+                addDetail('detail_xtls_settings_publickey', realitySettings.publicKey); // Add lang key
+             }
+
+
+            if (details.streamSettings.network === 'ws' && details.streamSettings.wsSettings) {
+                addDetail('detail_ws_path', details.streamSettings.wsSettings.path);
+                if (details.streamSettings.wsSettings.headers) {
+                    addDetail('detail_ws_host', details.streamSettings.wsSettings.headers.Host);
+                }
+            } else if (details.streamSettings.network === 'grpc' && details.streamSettings.grpcSettings) {
+                addDetail('detail_service_name', details.streamSettings.grpcSettings.serviceName);
+                addDetail('detail_multi_mode', typeof details.streamSettings.grpcSettings.multiMode === 'boolean' ? details.streamSettings.grpcSettings.multiMode : undefined);
+            } else if (details.streamSettings.network === 'kcp' && details.streamSettings.kcpSettings) {
+                addDetail('detail_header_type', details.streamSettings.kcpSettings.header?.type);
+                addDetail('detail_seed', details.streamSettings.kcpSettings.seed);
+                // Could add MTU, TTI etc. if desired
+            } else if (details.streamSettings.network === 'quic' && details.streamSettings.quicSettings) {
+                addDetail('detail_quic_security', details.streamSettings.quicSettings.security);
+                addDetail('detail_quic_key', details.streamSettings.quicSettings.key);
+                addDetail('detail_header_type', details.streamSettings.quicSettings.header?.type);
+            }
+            // TODO: Add other network types like tcp (http obfuscation), httpupgrade etc.
+        }
+        addDetail('detail_full_link', originalConfig.link, true);
+    };
+
+
     // --- Event Listeners ---
     function addEventListeners() {
         const safelyAddEventListener = (selector, event, handler, queryAll = false) => {
@@ -747,6 +1127,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error(`Error attaching event listener to ${selector}:`, error);
             }
         };
+
+        // Config Details Panel
+        safelyAddEventListener('#closeDetailsPanelBtn', 'click', closeDetailsPanel);
+
 
         // Toolbar buttons
         safelyAddEventListener('#openAddModalBtn', 'click', () => openModal('addConfigModal'));
@@ -1067,8 +1451,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.settings = { concurrentTests: 10, testTimeout: 8, testUrl: 'http://cp.cloudflare.com/generate_204' };
                 state.activeGroupId = 'all';
                 state.selectedConfigIds = [];
+                state.lastTestCompletionTime = null; // Reset last test time
                 saveAllData(); // Persist cleared state
                 renderAll();
+                updateDashboard(); // Update dashboard after clearing
                 showToast('All data cleared successfully.', 'success');
             })
             .catch(error => {
@@ -1147,39 +1533,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleTableClick = (e) => {
         const row = e.target.closest('tr');
-        if (!row || !row.dataset.id) return;
-        const configId = row.dataset.id;
-        const isCheckbox = e.target.type === 'checkbox';
+        if (!row || !row.dataset.id) return; // Click was not on a config row
 
-        if (e.shiftKey && state.lastSelectedId) {
-            const visibleConfigs = getVisibleConfigs();
-            const lastIdx = visibleConfigs.findIndex(c => c.id === state.lastSelectedId);
-            const currentIdx = visibleConfigs.findIndex(c => c.id === configId);
-            if (lastIdx !== -1 && currentIdx !== -1) {
-                const start = Math.min(lastIdx, currentIdx);
-                const end = Math.max(lastIdx, currentIdx);
-                const shiftSelectedIds = visibleConfigs.slice(start, end + 1).map(c => c.id);
-                if (isCheckbox && e.target.checked) { // if checking with shift, add to selection
-                    state.selectedConfigIds = [...new Set([...state.selectedConfigIds, ...shiftSelectedIds])];
-                } else if (isCheckbox && !e.target.checked) { // if unchecking with shift, remove from selection
-                     state.selectedConfigIds = state.selectedConfigIds.filter(id => !shiftSelectedIds.includes(id));
-                } else { // if just clicking row with shift (not checkbox directly)
-                    state.selectedConfigIds = shiftSelectedIds;
+        const configId = row.dataset.id;
+        const isCheckboxClick = e.target.type === 'checkbox';
+        const isSpecialKey = e.ctrlKey || e.metaKey || e.shiftKey;
+
+        // Logic for selection (Ctrl/Shift clicks or checkbox clicks)
+        if (isCheckboxClick || isSpecialKey) {
+            if (e.shiftKey && state.lastSelectedId) {
+                const visibleConfigs = getVisibleConfigs();
+                const lastIdx = visibleConfigs.findIndex(c => c.id === state.lastSelectedId);
+                const currentIdx = visibleConfigs.findIndex(c => c.id === configId);
+                if (lastIdx !== -1 && currentIdx !== -1) {
+                    const start = Math.min(lastIdx, currentIdx);
+                    const end = Math.max(lastIdx, currentIdx);
+                    const shiftSelectedIds = visibleConfigs.slice(start, end + 1).map(c => c.id);
+                    // If the checkbox itself was clicked to initiate shift-select
+                    if (isCheckboxClick && e.target.checked) {
+                        state.selectedConfigIds = [...new Set([...state.selectedConfigIds, ...shiftSelectedIds])];
+                    } else if (isCheckboxClick && !e.target.checked) {
+                        state.selectedConfigIds = state.selectedConfigIds.filter(id => !shiftSelectedIds.includes(id));
+                    } else { // Row click with shift (not directly on checkbox)
+                        state.selectedConfigIds = shiftSelectedIds;
+                    }
                 }
+            } else if (e.ctrlKey || e.metaKey) { // Ctrl/Cmd click
+                if (state.selectedConfigIds.includes(configId)) {
+                    state.selectedConfigIds = state.selectedConfigIds.filter(id => id !== configId);
+                } else {
+                    state.selectedConfigIds.push(configId);
+                }
+                state.lastSelectedId = configId;
+            } else { // Simple click (could be on checkbox or row)
+                state.selectedConfigIds = [configId];
+                state.lastSelectedId = configId;
             }
-        } else if (e.ctrlKey || e.metaKey) { // CMD key for macOS
-            if (state.selectedConfigIds.includes(configId)) {
-                state.selectedConfigIds = state.selectedConfigIds.filter(id => id !== configId);
-            } else {
-                state.selectedConfigIds.push(configId);
-            }
-            state.lastSelectedId = configId;
-        } else {
-            state.selectedConfigIds = [configId];
-            state.lastSelectedId = configId;
+            renderTable(); // Re-render for selection changes
+            updateConnectionButton();
         }
-        renderTable(); // Re-render for selection changes
-        updateConnectionButton();
+
+        // Logic for showing details panel (only on simple row click, not checkbox/multi-select)
+        // It should open if the click was not on a checkbox, and not a multi-select action
+        // unless the panel is already open for that ID.
+        if (!isCheckboxClick && !isSpecialKey) {
+            if (state.activeDetailConfigId === configId && $('#configDetailsPanel').classList.contains('open')) {
+                // If already open for this config, a simple click might close it (optional behavior)
+                // For now, let's assume a simple click on an already detailed config does nothing to the panel
+                // or re-affirms it. Or, if we want toggle: closeDetailsPanel();
+            } else {
+                showDetailsPanel(configId);
+            }
+        } else if (isCheckboxClick && state.selectedConfigIds.includes(configId) && state.selectedConfigIds.length === 1) {
+            // If a checkbox is clicked and it's the only selected item, also show its details.
+            showDetailsPanel(configId);
+        } else if (state.selectedConfigIds.length !== 1 && $('#configDetailsPanel').classList.contains('open')) {
+            // If multiple items are now selected, or no items, close the details panel.
+            closeDetailsPanel();
+        }
     };
 
     const handleTableContextMenu = (e) => {
@@ -1529,26 +1940,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderTable(); // Could be optimized to update only one row
         updateStatusBar();
+        updateDashboard(); // Update dashboard with new test results
     });
 
     window.api.onTestProgress(({ progress, total, completed }) => {
         state.isTesting = progress < 100;
-        $('#progressBar').style.width = `${progress}%`;
-        $('#progressText').textContent = `Testing ${completed}/${total} (${Math.round(progress)}%)`;
-        if (!state.isTesting) { // Ensure UI updates when progress hits 100%
-            $('#progressText').textContent = `Test complete. Total: ${total}, Healthy: ${state.configs.filter(c => c.status === 'healthy').length}`;
+        // Update general progress bar in status bar
+        const progressBar = $('#progressBar'); // General progress bar in status bar
+        const progressText = $('#progressText'); // Text next to general progress bar
+
+        if(progressBar) progressBar.value = progress; // Assuming it's a <progress> element
+        if(progressText) progressText.textContent = `Testing ${completed}/${total} (${Math.round(progress)}%)`;
+
+        if (!state.isTesting && progress === 100) { // Test just finished
+             if(progressText) progressText.textContent = `Test complete. Total: ${total}, Healthy: ${state.configs.filter(c => c.status === 'healthy').length}`;
         }
         updateTestUI();
     });
 
     window.api.onTestFinish(() => {
         state.isTesting = false;
+        state.lastTestCompletionTime = new Date().toISOString(); // Record last test time
+        saveAllData(); // Persist the new lastTestCompletionTime
+
         // Final update to all statuses that might still be 'testing' if stop was abrupt
         state.configs.forEach(c => { if (c.status === 'testing') c.status = 'untested'; });
+
         renderTable();
         updateTestUI();
         updateStatusBar();
-         $('#progressText').textContent = `Test complete. Total: ${state.configs.length}, Healthy: ${state.configs.filter(c => c.status === 'healthy').length}`;
+        updateDashboard(); // Update dashboard with final test stats and time
+
+        const totalConfigs = state.configs.length;
+        const healthyConfigs = state.configs.filter(c => c.status === 'healthy').length;
+        $('#progressText').textContent = `Test complete. Total: ${totalConfigs}, Healthy: ${healthyConfigs}`;
         showToast('All tests finished!', 'success');
     });
 
@@ -1572,6 +1997,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderTable(); // To update 'connected' class on rows
         updateConnectionButton();
+        updateDashboard(); // Update dashboard with connection status
     });
 
     // FEATURE: Live Ping (Idea #2)

@@ -429,6 +429,30 @@ ipcMain.on('proxy:disconnect', () => {
     if (connectionProcess) connectionProcess.kill();
 });
 
+ipcMain.handle('config:get-full-details', async (event, configLink) => {
+    // We use a dummy port because parseConfigLink requires it, but it's not used for details display.
+    // The primary purpose here is to get the parsed structure of the outbound config.
+    const parseResult = parseConfigLink(configLink, 0); // Port 0 is arbitrary here
+    if (parseResult.success && parseResult.config && parseResult.config.outbounds && parseResult.config.outbounds.length > 0) {
+        // We only need the first outbound and its streamSettings for details.
+        // The main 'config' object returned by parseConfigLink includes inbounds, log settings etc.
+        // which are not needed for just displaying the outbound details.
+        const outboundConfig = parseResult.config.outbounds[0];
+        return {
+            success: true,
+            details: {
+                protocol: outboundConfig.protocol,
+                settings: outboundConfig.settings,
+                streamSettings: outboundConfig.streamSettings,
+                // Potentially add other top-level useful info from the link if not directly in outboundConfig
+                // For example, the original name from hash if parseConfigLink doesn't include it here
+            }
+        };
+    } else {
+        return { success: false, error: parseResult.error || "Failed to parse config link for details." };
+    }
+});
+
 // FEATURE: Live Ping (Idea #2)
 function startLivePing() {
     stopLivePing(); // Ensure no multiple intervals are running
