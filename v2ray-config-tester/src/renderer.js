@@ -1791,18 +1791,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const handleDeleteGroup = async (groupId) => { // Assumes groupId is passed
-        if (!groupId) { // Might be called from context menu
-             if (state.activeGroupId && state.activeGroupId !== 'all') {
-                groupId = state.activeGroupId;
-            } else {
-                showToast("Select a group to delete.", "warning"); return;
-            }
-        }
-        const groupToDelete = state.groups.find(g => g.id === groupId);
-        if (!groupToDelete) {
-            showToast("Group not found for deletion.", "error"); return;
-        }
 
         const confirmed = await showConfirm({
             title: lang('confirm_delete_title'),
