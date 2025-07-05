@@ -58,6 +58,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const lang = (key) => translations[state.currentLanguage]?.[key] || key;
 
+    const formatStatus = (statusValue) => {
+        if (!statusValue) return lang('untested'); // Default if status is null or undefined
+        return lang(statusValue.toLowerCase()) || statusValue; // Use lang key or fallback to the value itself
+    };
+
+    const formatDelay = (delayValue) => {
+        if (delayValue === null || delayValue === undefined || delayValue < 0) {
+            // Could add a specific lang key for 'N/A' if desired, e.g., lang('na_delay')
+            return 'N/A';
+        }
+        return `${delayValue} ms`;
+    };
+
     // --- Initialization ---
     const init = async () => {
         try {
