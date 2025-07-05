@@ -140,15 +140,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cells = row.cells;
                 cells[0].firstChild.checked = isSelected; // Checkbox
 
-                const statusIndicator = cells[1].querySelector('.status-indicator');
-                const statusText = cells[1].querySelector('span:last-child');
-                const currentStatusClass = statusIndicator.className.match(/status-\S+/)?.[0];
-                const newStatusClass = `status-${config.status || 'untested'}`;
-                if (currentStatusClass !== newStatusClass) {
-                    if (currentStatusClass) statusIndicator.classList.remove(currentStatusClass);
-                    statusIndicator.classList.add(newStatusClass);
+                const statusCell = cells[1]; // Second cell is the status cell
+                const statusIndicator = statusCell.querySelector('.status-indicator');
+                const statusText = statusCell.querySelector('span:last-child'); // The text part of the status
+
+                if (statusIndicator && statusText) {
+                    const currentStatusClass = statusIndicator.className.match(/status-\S+/)?.[0];
+                    const newStatusClass = `status-${config.status || 'untested'}`;
+                    if (currentStatusClass !== newStatusClass) {
+                        if (currentStatusClass) statusIndicator.classList.remove(currentStatusClass);
+                        statusIndicator.classList.add(newStatusClass);
+                    }
+                    statusText.textContent = formatStatus(config.status);
+                } else {
+                    // This case should ideally not happen if rows are always created with the correct structure.
+                    // Log an error and potentially set a default display for the cell.
+                    console.error(`renderTable: Could not find .status-indicator or status text span for config ID: ${config.id}. Cell HTML:`, statusCell.innerHTML);
+                    // Fallback: Update the whole cell content if its structure is compromised
+                    statusCell.innerHTML = `<span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span>`;
                 }
-                statusText.textContent = formatStatus(config.status);
 
                 cells[2].textContent = config.name;
                 cells[2].title = config.name;
