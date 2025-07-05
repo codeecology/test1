@@ -94,6 +94,49 @@ document.addEventListener('DOMContentLoaded', () => {
             minutes_ago: "minutes ago",
             hours_ago: "hours ago",
             yesterday: "Yesterday",
+            // Toasts & Prompts
+            toast_group_added: "Group \"{groupName}\" added.",
+            toast_group_name_updated: "Group name updated to \"{groupName}\".",
+            toast_group_deleted: "Group \"{groupName}\" deleted.",
+            toast_configs_assigned: "{count} config(s) assigned to {groupNameText}.",
+            toast_config_name_updated: "Config name updated.",
+            toast_configs_deleted: "{count} config(s) deleted.",
+            toast_link_copied: "Link copied!",
+            toast_failed_copy_link: "Failed to copy link.",
+            toast_all_tests_finished: "All tests finished!",
+            toast_connection_failed: "Connection failed: {error}",
+            toast_disconnected: "Disconnected.",
+            toast_no_configs_to_test: "No configs to test.",
+            toast_test_already_running: "A test is already in progress.",
+            toast_selected_configs_tested_or_testing: "Selected configs are already tested or currently testing.",
+            toast_settings_saved: "Settings saved!",
+            toast_data_imported: "Data imported successfully!",
+            toast_data_exported: "Data exported successfully!",
+            toast_all_data_cleared: "All data cleared successfully.",
+            toast_no_unhealthy_to_delete: "No unhealthy configs to delete.",
+            toast_unhealthy_deleted: "{count} unhealthy configs deleted.",
+            toast_sub_url_empty: "Subscription URL is empty.",
+            toast_fetching_sub: "Fetching subscription...",
+            toast_failed_fetch_sub: "Failed to fetch subscription: {error}",
+            toast_paste_area_empty: "Text area is empty.",
+            toast_clipboard_empty_or_no_links: "Clipboard is empty or contains no valid links.",
+            toast_clipboard_empty: "Clipboard is empty.",
+            toast_failed_read_clipboard: "Failed to read from clipboard: {error}",
+            toast_group_name_empty: "Group name cannot be empty.",
+            toast_group_not_found_edit: "Group not found for editing.",
+            toast_group_not_found_delete: "Group not found for deletion.",
+            toast_select_single_config_edit_name: "Select a single config to edit its name.",
+            toast_config_not_found_edit: "Config not found for editing.",
+            toast_config_name_empty: "Config name cannot be empty.",
+            toast_no_configs_delete: "No configs selected to delete.",
+            toast_no_configs_assign: "No configs selected.",
+            prompt_new_group_title: "New Group Name",
+            prompt_new_group_message: "Enter name for the new group:",
+            // Context Menu
+            ctx_add_from_clipboard: "Add Config from Clipboard",
+            ctx_add_new_group: "Add New Group",
+            ctx_test_all_visible: "Test All Visible",
+            ctx_delete_all_unhealthy: "Delete All Unhealthy",
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -166,9 +209,58 @@ document.addEventListener('DOMContentLoaded', () => {
             minutes_ago: "دقیقه پیش",
             hours_ago: "ساعت پیش",
             yesterday: "دیروز",
+            // Toasts & Prompts - Farsi
+            toast_group_added: "گروه «{groupName}» اضافه شد.",
+            toast_group_name_updated: "نام گروه به «{groupName}» تغییر یافت.",
+            toast_group_deleted: "گروه «{groupName}» حذف شد.",
+            toast_configs_assigned: "{count} کانفیگ به {groupNameText} اختصاص داده شد.",
+            toast_config_name_updated: "نام کانفیگ به‌روز شد.",
+            toast_configs_deleted: "{count} کانفیگ حذف شد.",
+            toast_link_copied: "لینک کپی شد!",
+            toast_failed_copy_link: "خطا در کپی لینک.",
+            toast_all_tests_finished: "تمام تست‌ها تمام شدند!",
+            toast_connection_failed: "اتصال ناموفق: {error}",
+            toast_disconnected: "اتصال قطع شد.",
+            toast_no_configs_to_test: "کانفیگی برای تست وجود ندارد.",
+            toast_test_already_running: "تست در حال انجام است.",
+            toast_selected_configs_tested_or_testing: "کانفیگ‌های انتخاب شده تست شده‌اند یا در حال تست هستند.",
+            toast_settings_saved: "تنظیمات ذخیره شد!",
+            toast_data_imported: "داده‌ها با موفقیت وارد شدند!",
+            toast_data_exported: "داده‌ها با موفقیت صادر شدند!",
+            toast_all_data_cleared: "تمام داده‌ها با موفقیت پاک شدند.",
+            toast_no_unhealthy_to_delete: "کانفیگ ناسالمی برای حذف وجود ندارد.",
+            toast_unhealthy_deleted: "{count} کانفیگ ناسالم حذف شد.",
+            toast_sub_url_empty: "آدرس URL اشتراک خالی است.",
+            toast_fetching_sub: "در حال دریافت اشتراک...",
+            toast_failed_fetch_sub: "خطا در دریافت اشتراک: {error}",
+            toast_paste_area_empty: "کادر متن خالی است.",
+            toast_clipboard_empty_or_no_links: "کلیپ‌بورد خالی است یا لینک معتبری ندارد.",
+            toast_clipboard_empty: "کلیپ‌بورد خالی است.",
+            toast_failed_read_clipboard: "خطا در خواندن از کلیپ‌بورد: {error}",
+            toast_group_name_empty: "نام گروه نمی‌تواند خالی باشد.",
+            toast_group_not_found_edit: "گروه برای ویرایش یافت نشد.",
+            toast_group_not_found_delete: "گروه برای حذف یافت نشد.",
+            toast_select_single_config_edit_name: "برای ویرایش نام، یک کانفیگ انتخاب کنید.",
+            toast_config_not_found_edit: "کانفیگ برای ویرایش یافت نشد.",
+            toast_config_name_empty: "نام کانفیگ نمی‌تواند خالی باشد.",
+            toast_no_configs_delete: "کانفیگی برای حذف انتخاب نشده.",
+            toast_no_configs_assign: "کانفیگی انتخاب نشده.",
+            prompt_new_group_title: "نام گروه جدید",
+            prompt_new_group_message: "نام گروه جدید را وارد کنید:",
+            // Context Menu - Farsi
+            ctx_add_from_clipboard: "افزودن کانفیگ از کلیپ‌بورد",
+            ctx_add_new_group: "افزودن گروه جدید",
+            ctx_test_all_visible: "تست همه قابل مشاهده‌ها",
+            ctx_delete_all_unhealthy: "حذف همه ناسالم‌ها",
         }
     };
-    const lang = (key) => translations[state.currentLanguage]?.[key] || key;
+    const lang = (key, params = {}) => {
+        let translation = translations[state.currentLanguage]?.[key] || key;
+        for (const param in params) {
+            translation = translation.replace(`{${param}}`, params[param]);
+        }
+        return translation;
+    };
 
     const formatStatus = (statusValue) => {
         if (!statusValue) return lang('untested'); // Default if status is null or undefined
@@ -1382,7 +1474,7 @@ document.addEventListener('DOMContentLoaded', () => {
             $('#pasteArea').value = ''; // Clear textarea
             closeModal(); // Assuming this button is within a modal that should close
         } else {
-            showToast('Text area is empty.', 'warning');
+            showToast(lang('toast_paste_area_empty'), 'warning');
         }
     };
 
@@ -1391,17 +1483,21 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(fileContent => {
                 if (fileContent === null) return; // User cancelled dialog
                 const links = fileContent.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
-                processAndAddConfigs(links);
+                if (links.length > 0) {
+                    processAndAddConfigs(links);
+                    // Success toast is handled by processAndAddConfigs
+                }
+                // Optionally, add a toast if the file was empty or contained no valid links.
             })
             .catch(error => {
                 console.error("Error importing text file:", error);
-                showToast(`Failed to import file: ${error.message || 'Unknown error'}`, 'error');
+                showToast(lang('toast_failed_fetch_sub', { error: error.message || 'Unknown error' }), 'error'); // Reusing failed_fetch_sub for generic file error
             });
     };
 
     const handleExportConfigs = (configsToExport, defaultFilename) => {
         if (!configsToExport || configsToExport.length === 0) {
-            showToast('No configs to export.', 'info');
+            showToast(lang('toast_no_configs_export'), 'info'); // Add lang key: toast_no_configs_export
             return;
         }
         const content = configsToExport.map(c => c.link).join('\n');
@@ -1419,15 +1515,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleFetchSubscription = async () => {
         const subUrl = $('#subLinkInput').value.trim();
         if (!subUrl) {
-            showToast('Subscription URL is empty.', 'warning');
+            showToast(lang('toast_sub_url_empty'), 'warning');
             return;
         }
-        showToast('Fetching subscription...', 'info');
+        showToast(lang('toast_fetching_sub'), 'info');
         try {
             const result = await window.api.fetchSubscription(subUrl);
             if (result.success) {
                 const links = result.data.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
-                processAndAddConfigs(links);
+                if (links.length > 0) {
+                    processAndAddConfigs(links);
+                     // Success toast handled by processAndAddConfigs
+                }
                 $('#subLinkInput').value = ''; // Clear input
                 closeModal(); // Assuming this is in a modal
             } else {
@@ -1435,31 +1534,30 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error("Error fetching subscription:", error);
-            showToast(`Failed to fetch subscription: ${error.message || 'Unknown error'}`, 'error');
+            showToast(lang('toast_failed_fetch_sub', { error: error.message || 'Unknown error' }), 'error');
         }
     };
 
     const handleClearAllData = async () => {
-        const confirmed = await showConfirm({ title: 'Clear All Data', message: 'Are you sure you want to delete ALL configs, groups, and settings? This action cannot be undone.' });
+        const confirmed = await showConfirm({ title: lang('confirm_clear_all_data_title'), message: lang('confirm_clear_all_data_message') }); // Add lang keys
         if (!confirmed) return;
 
         window.api.clearAllData()
             .then(() => {
                 state.configs = [];
                 state.groups = [];
-                // Reset settings to default or clear them if appropriate
                 state.settings = { concurrentTests: 10, testTimeout: 8, testUrl: 'http://cp.cloudflare.com/generate_204' };
                 state.activeGroupId = 'all';
                 state.selectedConfigIds = [];
-                state.lastTestCompletionTime = null; // Reset last test time
-                saveAllData(); // Persist cleared state
+                state.lastTestCompletionTime = null;
+                saveAllData();
                 renderAll();
-                updateDashboard(); // Update dashboard after clearing
-                showToast('All data cleared successfully.', 'success');
+                updateDashboard();
+                showToast(lang('toast_all_data_cleared'), 'success');
             })
             .catch(error => {
                 console.error("Error clearing all data:", error);
-                showToast(`Failed to clear data: ${error.message || 'Unknown error'}`, 'error');
+                showToast(lang('toast_failed_clear_data', { error: error.message || 'Unknown error' }), 'error'); // Add lang key
             });
     };
 
@@ -1467,28 +1565,27 @@ document.addEventListener('DOMContentLoaded', () => {
         window.api.generateQRCode(link)
             .then(dataUrl => {
                 const qrImageEl = $('#qrCodeImage');
-                const qrNameEl = $('#qrCodeName'); // Corrected ID
+                const qrNameEl = $('#qrCodeName');
 
                 if (qrImageEl) qrImageEl.src = dataUrl;
                 else console.error("#qrCodeImage element not found for QR Code modal.");
 
-                if (qrNameEl) qrNameEl.textContent = link; // Display the link as well
+                if (qrNameEl) qrNameEl.textContent = link;
                 else console.error("#qrCodeName element not found for QR Code modal.");
 
                 openModal('qrCodeModal');
             })
             .catch(error => {
                 console.error("Error generating QR code:", error);
-                showToast(`Failed to generate QR code: ${error.message || 'Unknown error'}`, 'error');
+                showToast(lang('toast_failed_generate_qr', { error: error.message || 'Unknown error' }), 'error'); // Add lang key
             });
     };
 
-    // Placeholder for other handlers that were mentioned in the original code structure
     const handleStartTest = () => {
         if (state.isTesting) return;
-        const configsToTest = getVisibleConfigs().filter(c => c.status !== 'testing'); // Or based on selection
+        const configsToTest = getVisibleConfigs().filter(c => c.status !== 'testing');
         if (configsToTest.length === 0) {
-            showToast('No configs to test.', 'info');
+            showToast(lang('toast_no_configs_to_test'), 'info');
             return;
         }
         state.isTesting = true;
@@ -1511,9 +1608,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 $('#connectionStatus').textContent = lang('connecting');
                 window.api.connectProxy(selectedConfig.link);
             } else if (state.selectedConfigIds.length !== 1) {
-                showToast('Please select exactly one healthy config to connect.', 'warning');
+                showToast(lang('toast_select_one_healthy_config_connect'), 'warning'); // Add lang key
             } else {
-                showToast('Selected config is not healthy or not tested.', 'warning');
+                showToast(lang('toast_selected_config_not_healthy'), 'warning'); // Add lang key
             }
         }
     };
@@ -1638,12 +1735,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleDeleteUnhealthy = async () => {
         const unhealthyConfigs = state.configs.filter(c => c.status === 'unhealthy' || c.status === 'error' || (c.status === 'untested' && c.delay === -1));
         if (unhealthyConfigs.length === 0) {
-            showToast('No unhealthy configs to delete.', 'info');
+            showToast(lang('toast_no_unhealthy_to_delete'), 'info');
             return;
         }
         const confirmed = await showConfirm({
-            title: 'Delete Unhealthy Configs',
-            message: `Are you sure you want to delete ${unhealthyConfigs.length} unhealthy/error configs?`
+            title: lang('confirm_delete_unhealthy_title'), // Add lang key
+            message: lang('confirm_delete_unhealthy_message', { count: unhealthyConfigs.length }) // Add lang key
         });
         if (confirmed) {
             const unhealthyIds = new Set(unhealthyConfigs.map(c => c.id));
@@ -1651,8 +1748,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.selectedConfigIds = state.selectedConfigIds.filter(id => !unhealthyIds.has(id));
             saveAllData();
             renderAll();
-            updateDashboard(); // Update dashboard after deleting unhealthy configs
-            showToast(`${unhealthyIds.size} unhealthy configs deleted.`, 'success');
+            updateDashboard();
+            showToast(lang('toast_unhealthy_deleted', { count: unhealthyIds.size }), 'success');
         }
     };
 
@@ -1664,14 +1761,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (links.length > 0) {
                     processAndAddConfigs(links);
                 } else {
-                    showToast('Clipboard is empty or contains no valid links.', 'info');
+                    showToast(lang('toast_clipboard_empty_or_no_links'), 'info');
                 }
             } else {
-                showToast('Clipboard is empty.', 'info');
+                showToast(lang('toast_clipboard_empty'), 'info');
             }
         } catch (error) {
             console.error("Error reading from clipboard:", error);
-            showToast(`Failed to read from clipboard: ${error.message}`, 'error');
+            showToast(lang('toast_failed_read_clipboard', { error: error.message }), 'error');
         }
     };
 
@@ -1684,78 +1781,77 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             state.groups.push(newGroup);
             saveAllData();
-            renderGroups(); // Just re-render groups or renderAll()
-            showToast(`Group "${newGroup.name}" added.`, 'success');
-        } else if (groupName !== null) { // User submitted empty name
-            showToast('Group name cannot be empty.', 'warning');
+            renderGroups();
+            showToast(lang('toast_group_added', { groupName: newGroup.name }), 'success');
+        } else if (groupName !== null) {
+            showToast(lang('toast_group_name_empty'), 'warning');
         }
     };
 
     const handleEditGroup = async (groupId) => {
         const group = state.groups.find(g => g.id === groupId);
         if (!group) {
-            showToast('Group not found for editing.', 'error');
+            showToast(lang('toast_group_not_found_edit'), 'error');
             return;
         }
 
         const newGroupName = await showPrompt({
-            title: lang('edit_group_name_title') || 'Edit Group Name', // Add to translations
-            message: lang('edit_group_name_message') || 'Enter the new name for the group:', // Add to translations
+            title: lang('edit_group_name_title'),
+            message: lang('edit_group_name_message'),
             defaultValue: group.name
         });
 
         if (newGroupName && newGroupName.trim() !== '' && newGroupName.trim() !== group.name) {
             group.name = newGroupName.trim();
             saveAllData();
-            renderGroups(); // Re-render the group list
-            // No need to renderTable unless group name is shown in the table directly and not just via config.groupId lookup
-            showToast(`Group name updated to "${group.name}".`, 'success');
+            renderGroups();
+            showToast(lang('toast_group_name_updated', { groupName: group.name }), 'success');
         } else if (newGroupName !== null && newGroupName.trim() === '') {
-            showToast('Group name cannot be empty.', 'warning');
+            showToast(lang('toast_group_name_empty'), 'warning');
         }
-        // If newGroupName is null (cancel) or same as old name, do nothing.
     };
 
     const handleDeleteGroup = async (groupId) => {
         const groupToDelete = state.groups.find(g => g.id === groupId);
         if (!groupToDelete) {
-            showToast('Group not found for deletion.', 'error');
+            showToast(lang('toast_group_not_found_delete'), 'error');
             return;
         }
 
         const confirmed = await showConfirm({
-            title: lang('confirm_delete_group_title') || 'Delete Group', // Add to translations
-            message: `${lang('confirm_delete_group_message') || 'Are you sure you want to delete the group:'} "${groupToDelete.name}"? ${lang('confirm_delete_group_message_configs_note') || 'Configs in this group will become ungrouped.'}` // Add to translations
+            title: lang('confirm_delete_group_title'),
+            message: `${lang('confirm_delete_group_message')} "${groupToDelete.name}"? ${lang('confirm_delete_group_message_configs_note')}`
         });
 
         if (confirmed) {
+            const deletedGroupName = groupToDelete.name; // Store name before deletion
             state.groups = state.groups.filter(g => g.id !== groupId);
             state.configs.forEach(c => {
                 if (c.groupId === groupId) {
-                    c.groupId = null; // Ungroup configs
+                    c.groupId = null;
                 }
             });
 
             if (state.activeGroupId === groupId) {
-                state.activeGroupId = 'all'; // Reset to all if active group was deleted
+                state.activeGroupId = 'all';
             }
 
             saveAllData();
-            renderAll(); // Re-render groups and table (as configs might have changed group)
-            showToast(`Group "${groupToDelete.name}" deleted.`, 'success');
+            renderAll();
+            showToast(lang('toast_group_deleted', { groupName: deletedGroupName }), 'success');
         }
     };
 
 
-    const handleEditName = async (config) => { // Assumes config object is passed
-        if (!config) { // Might be called from context menu where config is derived from selected IDs
+    const handleEditName = async (config) => {
+        if (!config) {
             if (state.selectedConfigIds.length !== 1) {
-                 showToast("Select a single config to edit its name.", "warning"); return;
+                 showToast(lang('toast_select_single_config_edit_name'), "warning"); return;
             }
             config = state.configs.find(c => c.id === state.selectedConfigIds[0]);
         }
         if (!config) {
-             showToast("Config not found for editing.", "error"); return;
+             showToast(lang('toast_config_not_found_edit'), "error"); return;
         }
 
         const newName = await showPrompt({
@@ -1763,23 +1859,23 @@ document.addEventListener('DOMContentLoaded', () => {
             message: lang('edit_name_message'),
             defaultValue: config.name
         });
-        if (newName !== null && newName.trim() !== '') { // Check for null to allow cancel, and non-empty
+        if (newName !== null && newName.trim() !== '') {
             config.name = newName.trim();
             saveAllData();
             renderTable();
-            showToast('Config name updated.', 'success');
-        } else if (newName !== null) { // User submitted empty name
-             showToast('Config name cannot be empty.', 'warning');
+            showToast(lang('toast_config_name_updated'), 'success');
+        } else if (newName !== null) {
+             showToast(lang('toast_config_name_empty'), 'warning');
         }
     };
     
-    const handleDeleteConfig = async () => { // No argument, acts on selection
+    const handleDeleteConfig = async () => {
         if (state.selectedConfigIds.length === 0) {
-            showToast("No configs selected to delete.", "warning"); return;
+            showToast(lang('toast_no_configs_delete'), "warning"); return;
         }
         const confirmed = await showConfirm({
             title: lang('confirm_delete_title'),
-            message: `Are you sure you want to delete ${state.selectedConfigIds.length} selected config(s)?`
+            message: lang('confirm_delete_config_plural', { count: state.selectedConfigIds.length }) // Add lang key
         });
         if (confirmed) {
             const selectionIdSet = new Set(state.selectedConfigIds);
@@ -1788,25 +1884,26 @@ document.addEventListener('DOMContentLoaded', () => {
             state.lastSelectedId = null;
             saveAllData();
             renderAll();
-            updateDashboard(); // Update dashboard after deleting configs
-            showToast(`${selectionIdSet.size} config(s) deleted.`, 'success');
+            updateDashboard();
+            showToast(lang('toast_configs_deleted', { count: selectionIdSet.size }), 'success');
         }
     };
 
     // This is a duplicate of handleDeleteGroup, removing it.
-    // const handleDeleteGroup = async (groupId) => {
-    //     const groupToDelete = state.groups.find(g => g.id === groupId);
-    //     if (!groupToDelete) {
-    //         showToast('Group not found.', 'error');
-    //         return;
-    //     }
+    /*
+    const handleDeleteGroup = async (groupId) => {
+        const groupToDelete = state.groups.find(g => g.id === groupId);
+        if (!groupToDelete) {
+            showToast('Group not found.', 'error');
+            return;
+        }
 
-    //     const confirmed = await showConfirm({
-    //         title: lang('confirm_delete_group_title'), // Ensure this lang key exists
-    //         message: `${lang('confirm_delete_group_message') || 'Are you sure you want to delete the group:'} "${groupToDelete.name}"? ${lang('confirm_delete_group_message_configs_note') || 'Configs in this group will become ungrouped.'}`
-    //     });
-    //     if (confirmed) {
-    //         state.groups = state.groups.filter(g => g.id !== groupId);
+        const confirmed = await showConfirm({
+            title: lang('confirm_delete_group_title'), // Ensure this lang key exists
+            message: `${lang('confirm_delete_group_message') || 'Are you sure you want to delete the group:'} "${groupToDelete.name}"? ${lang('confirm_delete_group_message_configs_note') || 'Configs in this group will become ungrouped.'}`
+        });
+        if (confirmed) {
+            state.groups = state.groups.filter(g => g.id !== groupId);
             state.configs.forEach(c => { if (c.groupId === groupId) c.groupId = null; }); // Ungroup configs
             if (state.activeGroupId === groupId) state.activeGroupId = 'all'; // Reset active group if it was deleted
             saveAllData();
@@ -1814,21 +1911,22 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(`Group "${groupToDelete.name}" deleted.`, 'success');
         }
     };
+    */
 
-    const handleAssignToGroup = async (groupId) => { // groupId to assign to
+    const handleAssignToGroup = async (groupId) => {
         if (state.selectedConfigIds.length === 0) {
-            showToast("No configs selected.", "warning"); return;
+            showToast(lang('toast_no_configs_assign'), "warning"); return;
         }
-        if (groupId === 'new') { // Special value to prompt for new group
-            const groupName = await showPrompt({ title: "New Group Name", message: "Enter name for the new group:" });
+        if (groupId === 'new') {
+            const groupName = await showPrompt({ title: lang('prompt_new_group_title'), message: lang('prompt_new_group_message') });
             if (groupName && groupName.trim() !== "") {
                 const newGroup = { id: `grp_${Date.now()}_${Math.random().toString(36).substring(2,9)}`, name: groupName.trim() };
                 state.groups.push(newGroup);
-                groupId = newGroup.id; // Assign to the newly created group
-                renderGroups(); // Update group list
-            } else if (groupName !== null) { // User submitted empty name
-                showToast("Group name cannot be empty.", "warning"); return;
-            } else { // User cancelled prompt
+                groupId = newGroup.id;
+                renderGroups();
+            } else if (groupName !== null) {
+                showToast(lang('toast_group_name_empty'), "warning"); return;
+            } else {
                 return;
             }
         }
@@ -1836,36 +1934,34 @@ document.addEventListener('DOMContentLoaded', () => {
         let assignedCount = 0;
         state.configs.forEach(c => {
             if (state.selectedConfigIds.includes(c.id)) {
-                c.groupId = groupId; // groupId can be null to ungroup
+                c.groupId = groupId;
                 assignedCount++;
             }
         });
         saveAllData();
-        renderTable(); // Update table to reflect group changes
-        renderGroups(); // Update group counts
+        renderTable();
+        renderGroups();
         const targetGroup = state.groups.find(g => g.id === groupId);
-        const groupNameText = targetGroup ? `"${targetGroup.name}"` : "ungrouped";
-        showToast(`${assignedCount} config(s) assigned to ${groupNameText}.`, 'success');
+        const groupNameText = targetGroup ? `"${targetGroup.name}"` : lang('ungrouped'); // Use lang key for "ungrouped"
+        showToast(lang('toast_configs_assigned', { count: assignedCount, groupNameText: groupNameText }), 'success');
     };
     
     const getGlobalContextMenuItems = () => {
-        // Simplified example
         return [
-            { label: 'Add Config from Clipboard', action: handleAddFromClipboard },
-            { label: 'Add New Group', action: handleAddGroup },
+            { label: lang('ctx_add_from_clipboard'), action: handleAddFromClipboard },
+            { label: lang('ctx_add_new_group'), action: handleAddGroup },
             { type: 'separator' },
-            { label: 'Test All Visible', action: () => handleStartTest() /* or more specific logic */ },
-            { label: 'Delete All Unhealthy', action: handleDeleteUnhealthy },
+            { label: lang('ctx_test_all_visible'), action: () => handleStartTest() },
+            { label: lang('ctx_delete_all_unhealthy'), action: handleDeleteUnhealthy },
         ];
     };
 
     const getConfigContextMenuItems = () => {
-        // Simplified example, actions would call handlers like handleEditName, handleDeleteConfig etc.
         const items = [];
         if (state.selectedConfigIds.length === 1) {
             const selectedConfig = state.configs.find(c => c.id === state.selectedConfigIds[0]);
             if(selectedConfig) {
-                 items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(selectedConfig.link).then(() => showToast('Link copied!', 'success')).catch(e => showToast('Failed to copy link.', 'error')) });
+                 items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(selectedConfig.link).then(() => showToast(lang('toast_link_copied'), 'success')).catch(e => showToast(lang('toast_failed_copy_link'), 'error')) });
                  items.push({ label: lang('show_qr_code'), action: () => handleShowQRCode(selectedConfig.link) });
                  items.push({ label: lang('edit_name'), action: () => handleEditName(selectedConfig) });
             }
@@ -1876,12 +1972,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: `${lang('test_selected')} (${state.selectedConfigIds.length})`,
                 action: () => {
                     if (state.isTesting) {
-                        showToast('A test is already in progress.', 'warning');
+                        showToast(lang('toast_test_already_running'), 'warning');
                         return;
                     }
                     const configsToTest = state.configs.filter(c => state.selectedConfigIds.includes(c.id) && c.status !== 'testing');
                     if (configsToTest.length === 0) {
-                        showToast('Selected configs are already tested or currently testing.', 'info');
+                        showToast(lang('toast_selected_configs_tested_or_testing'), 'info');
                         return;
                     }
                     state.isTesting = true;
@@ -1898,23 +1994,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Assign to Group Options ---
         if (state.selectedConfigIds.length > 0) {
             items.push({ type: 'separator' });
-            // Add a non-clickable label for the section
-            items.push({ label: lang('assign_to_group'), disabled: true }); // Make it a non-actionable header
+            items.push({ label: lang('assign_to_group'), disabled: true });
 
             state.groups.forEach(g => {
                 items.push({
-                    label: `  ${g.name}`, // Indent for visual grouping
+                    label: `  ${g.name}`,
                     action: () => handleAssignToGroup(g.id)
                 });
             });
             items.push({ type: 'separator' });
             items.push({
-                label: `  ${lang('assign_to_new_group') || 'New Group...'}`, // Add translation if needed
+                label: `  ${lang('assign_to_new_group')}`,
                 action: () => handleAssignToGroup('new')
             });
             if (state.selectedConfigIds.some(id => state.configs.find(c => c.id === id)?.groupId !== null)) {
                 items.push({
-                    label: `  ${lang('ungroup_config') || 'Ungroup'}`, // Add translation if needed
+                    label: `  ${lang('ungroup_config')}`,
                     action: () => handleAssignToGroup(null)
                 });
             }
@@ -1935,66 +2030,62 @@ document.addEventListener('DOMContentLoaded', () => {
             config.status = result.delay > -1 ? 'healthy' : (result.error ? 'error' : 'unhealthy');
             if (result.error) config.errorMessage = result.error; else delete config.errorMessage;
         }
-        renderTable(); // Could be optimized to update only one row
+        renderTable();
         updateStatusBar();
-        updateDashboard(); // Update dashboard with new test results
+        updateDashboard();
     });
 
     window.api.onTestProgress(({ progress, total, completed }) => {
         state.isTesting = progress < 100;
-        // Update general progress bar in status bar
-        const progressBar = $('#progressBar'); // General progress bar in status bar
-        const progressText = $('#progressText'); // Text next to general progress bar
+        const progressBar = $('#progressBar');
+        const progressText = $('#progressText');
 
-        if(progressBar) progressBar.value = progress; // Assuming it's a <progress> element
-        if(progressText) progressText.textContent = `Testing ${completed}/${total} (${Math.round(progress)}%)`;
+        if(progressBar) progressBar.value = progress;
+        if(progressText) progressText.textContent = lang('testing_progress', { completed, total, progress: Math.round(progress) }); // Add lang key
 
-        if (!state.isTesting && progress === 100) { // Test just finished
-             if(progressText) progressText.textContent = `Test complete. Total: ${total}, Healthy: ${state.configs.filter(c => c.status === 'healthy').length}`;
+        if (!state.isTesting && progress === 100) {
+             if(progressText) progressText.textContent = lang('test_complete_summary', { total, healthy: state.configs.filter(c => c.status === 'healthy').length }); // Add lang key
         }
         updateTestUI();
     });
 
     window.api.onTestFinish(() => {
         state.isTesting = false;
-        state.lastTestCompletionTime = new Date().toISOString(); // Record last test time
-        saveAllData(); // Persist the new lastTestCompletionTime
+        state.lastTestCompletionTime = new Date().toISOString();
+        saveAllData();
 
-        // Final update to all statuses that might still be 'testing' if stop was abrupt
         state.configs.forEach(c => { if (c.status === 'testing') c.status = 'untested'; });
 
         renderTable();
         updateTestUI();
         updateStatusBar();
-        updateDashboard(); // Update dashboard with final test stats and time
+        updateDashboard();
 
         const totalConfigs = state.configs.length;
         const healthyConfigs = state.configs.filter(c => c.status === 'healthy').length;
-        $('#progressText').textContent = `Test complete. Total: ${totalConfigs}, Healthy: ${healthyConfigs}`;
-        showToast('All tests finished!', 'success');
+        // Ensure this text is also localized if it's different from the onTestProgress one.
+        // For now, it seems covered by the onTestProgress at 100%.
+        // $('#progressText').textContent = `Test complete. Total: ${totalConfigs}, Healthy: ${healthyConfigs}`;
+        showToast(lang('toast_all_tests_finished'), 'success');
     });
 
     window.api.onProxyStatusChange(({ isConnected, error }) => {
         if (isConnected) {
-            state.activeConnectionId = state.selectedConfigIds.length === 1 ? state.selectedConfigIds[0] : null; // Assuming connection was from a single selection
-            // If activeConnectionId is somehow null here but we are connected, we need a way to know which config it is.
-            // This might require the main process to send back the ID of the config it connected to.
-            // For now, if selection changed before status update, this might be imperfect.
+            state.activeConnectionId = state.selectedConfigIds.length === 1 ? state.selectedConfigIds[0] : null;
             if (!state.activeConnectionId) {
-                // This case needs more robust handling; perhaps main sends back the link/ID it connected with.
                 console.warn("Proxy connected, but renderer couldn't determine activeConnectionId from selection.");
             }
         } else {
             state.activeConnectionId = null;
             if (error) {
-                showToast(`Connection failed: ${error}`, 'error');
+                showToast(lang('toast_connection_failed', { error }), 'error');
             } else {
-                showToast('Disconnected.', 'info');
+                showToast(lang('toast_disconnected'), 'info');
             }
         }
-        renderTable(); // To update 'connected' class on rows
+        renderTable();
         updateConnectionButton();
-        updateDashboard(); // Update dashboard with connection status
+        updateDashboard();
     });
 
     // FEATURE: Live Ping (Idea #2)
