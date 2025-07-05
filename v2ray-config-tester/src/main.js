@@ -198,12 +198,30 @@ ipcMain.handle('qr:generate', async (event, link) => {
 });
 // FEATURE: Get Country from Hostname (Idea #8)
 ipcMain.handle('system:get-country', async (event, hostname) => {
+    console.log(`[system:get-country] Received hostname: ${hostname}`);
+    if (!hostname || typeof hostname !== 'string') {
+        console.warn(`[system:get-country] Invalid hostname received: ${hostname}. Returning 'XX'.`);
+        return 'XX';
+    }
     try {
-        const { address } = await dns.lookup(hostname);
+        const { address, family } = await dns.lookup(hostname);
+        console.log(`[system:get-country] DNS lookup for ${hostname}: IP Address = ${address}, Family = ${family}`);
+
+        // ip-country might not support IPv6 well, or hostnames that resolve to IPv6 first.
+        // Let's prefer IPv4 if available, or check what ipCountry supports.
+        // For now, we use what dns.lookup gives by default.
+
         const countryData = ipCountry.lookup(address);
-        return countryData ? countryData.country : 'XX';
+
+        if (countryData) {
+            console.log(`[system:get-country] ipCountry.lookup for ${address} (from ${hostname}): Found country = ${countryData.country}`);
+            return countryData.country;
+        } else {
+            console.warn(`[system:get-country] ipCountry.lookup for ${address} (from ${hostname}): No country data found. Returning 'XX'.`);
+            return 'XX';
+        }
     } catch (error) {
-        console.warn(`Failed to get country for hostname "${hostname}": ${error.message}. Returning 'XX'.`);
+        console.warn(`[system:get-country] DNS lookup failed for hostname "${hostname}": ${error.message}. Returning 'XX'.`);
         return 'XX'; // Return a placeholder on error
     }
 });

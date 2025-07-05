@@ -30,30 +30,43 @@ document.addEventListener('DOMContentLoaded', () => {
         en: {
             groups: "Groups", all_configs: "All Configs", add_config: "Add Config", delete_unhealthy: "Delete Unhealthy",
             start_test: "Start Test", stop_test: "Stop Test", status: "Status", name: "Name", group: "Group", country: "Country",
-            protocol: "Protocol", network: "Network", delay: "Delay", details: "Details", connect: "Connect", disconnect: "Disconnect",
+            protocol: "Protocol", network: "Network", delay: "Delay", port: "Port", details: "Details", connect: "Connect", disconnect: "Disconnect",
             not_connected: "Not Connected", connecting: "Connecting...", connected_to: "Connected to", settings: "Settings",
             untested: "Untested", testing: "Testing", healthy: "Healthy", unhealthy: "Unhealthy", error: "Error",
             test_selected: "Test Selected", copy_link: "Copy Link", assign_to_group: "Assign to Group",
             show_qr_code: "Show QR Code", delete: "Delete", edit_name: "Edit Name",
             confirm_delete_title: "Confirm Deletion", confirm_delete_config: "Are you sure you want to delete this config?",
-            confirm_delete_group: "Are you sure you want to delete this group? Configs will become ungrouped.",
+            confirm_delete_group_title: "Delete Group", // New
+            confirm_delete_group_message: "Are you sure you want to delete the group:", // New
+            confirm_delete_group_message_configs_note: "Configs in this group will become ungrouped.", // New
             add_group_title: "Add New Group", add_group_message: "Enter the name for the new group:",
             edit_name_title: "Edit Name", edit_name_message: "Enter the new name for the config:",
+            edit_group_name_title: "Edit Group Name", // New
+            edit_group_name_message: "Enter the new name for the group:", // New
             toast_configs_added: "new configs added.",
+            assign_to_new_group: "New Group...", // New
+            ungroup_config: "Ungroup", // New
+            port: "Port", // New
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
             start_test: "شروع تست", stop_test: "توقف تست", status: "وضعیت", name: "نام", group: "گروه", country: "کشور",
-            protocol: "پروتکل", network: "شبکه", delay: "تأخیر", details: "جزئیات", connect: "اتصال", disconnect: "قطع اتصال",
+            protocol: "پروتکل", network: "شبکه", delay: "تأخیر", port: "پورت", details: "جزئیات", connect: "اتصال", disconnect: "قطع اتصال",
             not_connected: "متصل نیستید", connecting: "در حال اتصال...", connected_to: "متصل به", settings: "تنظیمات",
             untested: "تست نشده", testing: "در حال تست", healthy: "سالم", unhealthy: "ناسالم", error: "خطا",
             test_selected: "تست منتخب‌ها", copy_link: "کپی لینک", assign_to_group: "اختصاص به گروه",
             show_qr_code: "نمایش QR Code", delete: "حذف", edit_name: "ویرایش نام",
             confirm_delete_title: "تایید حذف", confirm_delete_config: "آیا از حذف این کانفیگ مطمئن هستید؟",
-            confirm_delete_group: "آیا از حذف این گروه مطمئن هستید؟ کانفیگ‌های داخل آن بدون گروه خواهند شد.",
+            confirm_delete_group_title: "حذف گروه", // New
+            confirm_delete_group_message: "آیا از حذف گروه مطمئن هستید:", // New
+            confirm_delete_group_message_configs_note: "کانفیگ‌های این گروه بدون گروه خواهند شد.", // New
             add_group_title: "افزودن گروه جدید", add_group_message: "نام گروه جدید را وارد کنید:",
             edit_name_title: "ویرایش نام", edit_name_message: "نام جدید کانفیگ را وارد کنید:",
+            edit_group_name_title: "ویرایش نام گروه", // New
+            edit_group_name_message: "نام جدید گروه را وارد کنید:", // New
             toast_configs_added: "کانفیگ جدید اضافه شد.",
+            assign_to_new_group: "گروه جدید...", // New
+            ungroup_config: "بدون گروه", // New
         }
     };
     const lang = (key) => translations[state.currentLanguage]?.[key] || key;
@@ -126,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderTable = () => {
         const tableBody = $('#configsTableBody');
         const configsToRender = getVisibleConfigs();
-        const colspanValue = 8; // 7 original columns + 1 for Details
+        const colspanValue = 9; // 7 original columns + 1 for Port + 1 for Details
 
         if (configsToRender.length === 0 && state.searchTerm === '' && state.activeGroupId === 'all') {
             tableBody.innerHTML = `<tr><td colspan="${colspanValue}" style="text-align: center; padding: 40px;">No configurations added yet. Click "Add Config" or "Import".</td></tr>`;
@@ -205,9 +218,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 cells[4].textContent = formatDelay(config.delay);
                 cells[5].textContent = config.protocol;
-                cells[6].textContent = config.network; // This is the general network type (tcp, ws, grpc)
-                cells[7].textContent = formatDetails(config); // New Details cell
-                cells[7].title = formatDetails(config); // Set title for full details on hover
+                cells[6].textContent = config.network;
+                cells[7].textContent = config.portToDisplay || '-'; // New Port cell
+                cells[8].textContent = formatDetails(config);
+                cells[8].title = formatDetails(config);
 
                 existingRowsById.delete(config.id); // Remove from map as it's been processed
             } else { // Row doesn't exist, create it
@@ -224,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${formatDelay(config.delay)}</td>
                     <td>${config.protocol}</td>
                     <td>${config.network}</td>
+                    <td>${config.portToDisplay || '-'}</td>
                     <td title="${formatDetails(config)}">${formatDetails(config)}</td>
                 `;
                 fragmentForNewRows.appendChild(row); // Add to fragment for new rows
@@ -273,9 +288,39 @@ document.addEventListener('DOMContentLoaded', () => {
         state.groups.forEach(group => {
             const li = document.createElement('li');
             li.className = `group-item ${state.activeGroupId === group.id ? 'active' : ''}`;
-            li.dataset.groupId = group.id;
-            const configCount = state.configs.filter(c => c.groupId === group.id).length;
-            li.innerHTML = `<i class="fa-solid fa-folder"></i> <span>${group.name}</span> <span class="group-count">${configCount}</span>`;
+            li.dataset.groupId = group.id; // Keep this for selecting the group
+
+            const groupNameSpan = document.createElement('span');
+            groupNameSpan.textContent = group.name;
+
+            const iconFolder = document.createElement('i');
+            iconFolder.className = 'fa-solid fa-folder';
+
+            li.appendChild(iconFolder);
+            li.appendChild(document.createTextNode(' ')); // Add a space
+            li.appendChild(groupNameSpan);
+
+            const configCountSpan = document.createElement('span');
+            configCountSpan.className = 'group-count';
+            configCountSpan.textContent = state.configs.filter(c => c.groupId === group.id).length;
+            li.appendChild(configCountSpan);
+
+            const actionsSpan = document.createElement('span');
+            actionsSpan.className = 'group-actions';
+
+            const editBtn = document.createElement('i');
+            editBtn.className = 'fa-solid fa-pencil btn-edit-group';
+            editBtn.title = 'Edit group name';
+            editBtn.dataset.groupId = group.id;
+            actionsSpan.appendChild(editBtn);
+
+            const deleteBtn = document.createElement('i');
+            deleteBtn.className = 'fa-solid fa-trash-alt btn-delete-group';
+            deleteBtn.title = 'Delete group';
+            deleteBtn.dataset.groupId = group.id;
+            actionsSpan.appendChild(deleteBtn);
+
+            li.appendChild(actionsSpan);
             groupList.appendChild(li);
         });
     };
@@ -393,10 +438,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     protocol: protocolName,
                     // 'network' is used for the table column, 'networkType' for details to avoid conflict
                     network: configDetails.networkType, // Keep existing 'network' field for direct display
+                    portToDisplay: url.port || '-', // Store port for direct display in table
                     status: 'untested', delay: null,
-                    groupId: state.activeGroupId === 'all' ? null : state.activeGroupId,
-                    // Store extracted details
-                    port: configDetails.port,
+                    // Fix: Assign to active group if not 'all', otherwise null
+                    groupId: state.activeGroupId && state.activeGroupId !== 'all' ? state.activeGroupId : null,
+                    // Store extracted details (these are used by formatDetails)
+                    port: configDetails.port, // Keep this for formatDetails consistency
                     security: configDetails.security,
                     sni: configDetails.sni,
                     fp: configDetails.fp,
@@ -712,7 +759,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Sidebar
         safelyAddEventListener('#addGroupBtn', 'click', handleAddGroup);
-        safelyAddEventListener('#groupList', 'click', handleGroupClick);
+        safelyAddEventListener('#groupList', 'click', (e) => {
+            const groupItem = e.target.closest('.group-item');
+            const editBtn = e.target.closest('.btn-edit-group');
+            const deleteBtn = e.target.closest('.btn-delete-group');
+
+            if (editBtn && groupItem) {
+                const groupId = editBtn.dataset.groupId;
+                if (groupId && groupId !== 'all') { // Cannot edit/delete "All Configs"
+                    handleEditGroup(groupId);
+                }
+            } else if (deleteBtn && groupItem) {
+                const groupId = deleteBtn.dataset.groupId;
+                if (groupId && groupId !== 'all') { // Cannot edit/delete "All Configs"
+                    handleDeleteGroup(groupId);
+                }
+            } else if (groupItem) {
+                // This is a click on the group item itself (not edit/delete buttons)
+                handleGroupClick(e);
+            }
+        });
 
         // Main table
         safelyAddEventListener('#configsTableBody', 'click', handleTableClick);
@@ -1213,6 +1279,61 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const handleEditGroup = async (groupId) => {
+        const group = state.groups.find(g => g.id === groupId);
+        if (!group) {
+            showToast('Group not found for editing.', 'error');
+            return;
+        }
+
+        const newGroupName = await showPrompt({
+            title: lang('edit_group_name_title') || 'Edit Group Name', // Add to translations
+            message: lang('edit_group_name_message') || 'Enter the new name for the group:', // Add to translations
+            defaultValue: group.name
+        });
+
+        if (newGroupName && newGroupName.trim() !== '' && newGroupName.trim() !== group.name) {
+            group.name = newGroupName.trim();
+            saveAllData();
+            renderGroups(); // Re-render the group list
+            // No need to renderTable unless group name is shown in the table directly and not just via config.groupId lookup
+            showToast(`Group name updated to "${group.name}".`, 'success');
+        } else if (newGroupName !== null && newGroupName.trim() === '') {
+            showToast('Group name cannot be empty.', 'warning');
+        }
+        // If newGroupName is null (cancel) or same as old name, do nothing.
+    };
+
+    const handleDeleteGroup = async (groupId) => {
+        const groupToDelete = state.groups.find(g => g.id === groupId);
+        if (!groupToDelete) {
+            showToast('Group not found for deletion.', 'error');
+            return;
+        }
+
+        const confirmed = await showConfirm({
+            title: lang('confirm_delete_group_title') || 'Delete Group', // Add to translations
+            message: `${lang('confirm_delete_group_message') || 'Are you sure you want to delete the group:'} "${groupToDelete.name}"? ${lang('confirm_delete_group_message_configs_note') || 'Configs in this group will become ungrouped.'}` // Add to translations
+        });
+
+        if (confirmed) {
+            state.groups = state.groups.filter(g => g.id !== groupId);
+            state.configs.forEach(c => {
+                if (c.groupId === groupId) {
+                    c.groupId = null; // Ungroup configs
+                }
+            });
+
+            if (state.activeGroupId === groupId) {
+                state.activeGroupId = 'all'; // Reset to all if active group was deleted
+            }
+
+            saveAllData();
+            renderAll(); // Re-render groups and table (as configs might have changed group)
+            showToast(`Group "${groupToDelete.name}" deleted.`, 'success');
+        }
+    };
+
 
     const handleEditName = async (config) => { // Assumes config object is passed
         if (!config) { // Might be called from context menu where config is derived from selected IDs
@@ -1366,15 +1487,33 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        const groupSubmenu = state.groups.map(g => ({ label: g.name, action: () => handleAssignToGroup(g.id) }));
-        groupSubmenu.push({ type: 'separator' });
-        groupSubmenu.push({ label: 'New Group...', action: () => handleAssignToGroup('new')});
-        if (state.selectedConfigIds.some(id => state.configs.find(c=>c.id===id)?.groupId !== null)) { // Only show if some are grouped
-             groupSubmenu.push({ label: 'Ungroup', action: () => handleAssignToGroup(null) });
-        }
-        items.push({ label: lang('assign_to_group'), submenu: groupSubmenu });
+        // --- Assign to Group Options ---
+        if (state.selectedConfigIds.length > 0) {
+            items.push({ type: 'separator' });
+            // Add a non-clickable label for the section
+            items.push({ label: lang('assign_to_group'), disabled: true }); // Make it a non-actionable header
 
-        items.push({ type: 'separator' });
+            state.groups.forEach(g => {
+                items.push({
+                    label: `  ${g.name}`, // Indent for visual grouping
+                    action: () => handleAssignToGroup(g.id)
+                });
+            });
+            items.push({ type: 'separator' });
+            items.push({
+                label: `  ${lang('assign_to_new_group') || 'New Group...'}`, // Add translation if needed
+                action: () => handleAssignToGroup('new')
+            });
+            if (state.selectedConfigIds.some(id => state.configs.find(c => c.id === id)?.groupId !== null)) {
+                items.push({
+                    label: `  ${lang('ungroup_config') || 'Ungroup'}`, // Add translation if needed
+                    action: () => handleAssignToGroup(null)
+                });
+            }
+            items.push({ type: 'separator' });
+        }
+        // --- End Assign to Group Options ---
+
         items.push({ label: `${lang('delete')} (${state.selectedConfigIds.length})`, action: () => handleDeleteConfig() });
         return items;
     };
