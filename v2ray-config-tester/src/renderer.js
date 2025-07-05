@@ -440,53 +440,56 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // If specific setup is needed for a modal, do it before showing.
+        // Hide any currently active modals first
+        $$('.modal.active').forEach(activeModal => {
+            if (activeModal.id !== modalId) { // Don't remove active from the one we are about to show
+                activeModal.classList.remove('active');
+            }
+        });
+
+        // Populate specific modal content before showing
         if (modalId === 'settingsModal') {
             const concurrentTestsInput = $('#concurrentTestsInput');
             const testTimeoutInput = $('#testTimeoutInput');
             const testUrlInput = $('#testUrlInput');
-            if (concurrentTestsInput) concurrentTestsInput.value = state.settings.concurrentTests; else console.warn('#concurrentTestsInput not found in settings modal');
-            if (testTimeoutInput) testTimeoutInput.value = state.settings.testTimeout; else console.warn('#testTimeoutInput not found in settings modal');
-            if (testUrlInput) testUrlInput.value = state.settings.testUrl; else console.warn('#testUrlInput not found in settings modal');
+            if (concurrentTestsInput) concurrentTestsInput.value = state.settings.concurrentTests; else console.warn('#concurrentTestsInput not found');
+            if (testTimeoutInput) testTimeoutInput.value = state.settings.testTimeout; else console.warn('#testTimeoutInput not found');
+            if (testUrlInput) testUrlInput.value = state.settings.testUrl; else console.warn('#testUrlInput not found');
         } else if (modalId === 'promptModal') {
             const promptInput = $('#promptInput');
             if (promptInput) {
-                 // Ensure prompt input is visible before focusing
-                if (modalElement.style.display !== 'flex' && modalElement.style.display !== 'block') { // Check if modal is hidden
-                    // This case implies modalElement itself might have display:none, which shouldn't happen if CSS is right
-                    // However, to be safe:
-                    modalElement.style.display = 'flex'; // or 'block' based on its styling
-                }
-                promptInput.focus();
+                // Value is set by showPrompt, focus after modal is displayed
             } else {
-                console.warn('#promptInput not found in prompt modal');
+                console.warn('#promptInput not found');
             }
         } else if (modalId === 'qrCodeModal') {
-            // Potentially clear old QR code name if it exists, though it's set by handleShowQRCode
-            const qrCodeNameEl = $('#qrCodeName'); // Assuming this element is for the name/link text
-            if(qrCodeNameEl) qrCodeNameEl.textContent = ''; // Clear it before showing new one
+            const qrCodeNameEl = $('#qrCodeName');
+            if(qrCodeNameEl) qrCodeNameEl.textContent = '';
         }
 
+        backdrop.style.display = 'flex'; // Make backdrop visible
+        backdrop.classList.add('active');  // For opacity transition
 
-        backdrop.style.display = 'flex'; // Show the backdrop
-        backdrop.classList.add('active');  // Trigger animation for backdrop
+        modalElement.classList.add('active'); // Make specific modal visible (CSS handles display:flex and animation)
 
-        // Individual modals are display:flex by default in CSS, hidden by backdrop.
-        // The .active class on the modal itself can be used for entry animations if defined in CSS.
-        // e.g., .modal.active { transform: scale(1); opacity: 1; }
-        modalElement.classList.add('active');
+        if (modalId === 'promptModal') {
+            const promptInput = $('#promptInput');
+            if (promptInput) promptInput.focus(); // Focus after modal is made visible
+        }
     };
 
     const closeModal = () => {
         const backdrop = $('#modalBackdrop');
         if (backdrop) {
-            backdrop.style.display = 'none';
-            backdrop.classList.remove('active');
-             // Also remove active class from any active modal to reset its state (e.g., for animations)
-            $$('.modal.active').forEach(modal => modal.classList.remove('active'));
+            backdrop.style.display = 'none'; // Hide backdrop immediately
+            backdrop.classList.remove('active'); // For opacity transition
         } else {
             console.error("Modal backdrop #modalBackdrop not found during closeModal.");
         }
+        // Remove .active from any modal that might have it
+        $$('.modal.active').forEach(modal => {
+            modal.classList.remove('active');
+        });
     };
     
     const showContextMenu = (e, items) => {
@@ -515,13 +518,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (item.disabled) {
                     li.classList.add('disabled');
-                } else {
+                } else if (typeof item.action === 'function') {
                     li.addEventListener('click', (clickEvent) => {
                         clickEvent.stopPropagation(); // Prevent click from bubbling to document listener immediately
                         item.action();
                         menu.style.display = 'none';
                         menu.classList.remove('active');
                     });
+                } else if (item.submenu) {
+                    // This is a submenu parent. For now, make it non-interactive or style it.
+                    // Full submenu functionality is a later enhancement.
+                    li.classList.add('submenu-parent'); // Add a class for styling
+                    const arrow = document.createElement('span');
+                    arrow.className = 'submenu-arrow'; // Style this with CSS
+                    arrow.innerHTML = ' &raquo;'; // Example arrow
+                    li.appendChild(arrow);
+                    // Make it non-clickable for now, or setup hover to show submenu later
                 }
                 ul.appendChild(li);
             }
@@ -1002,8 +1014,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleShowQRCode = (link) => {
         window.api.generateQRCode(link)
             .then(dataUrl => {
-                $('#qrCodeImage').src = dataUrl;
-                $('#qrCodeLinkText').textContent = link; // Display the link as well
+                const qrImageEl = $('#qrCodeImage');
+                const qrNameEl = $('#qrCodeName'); // Corrected ID
+
+                if (qrImageEl) qrImageEl.src = dataUrl;
+                else console.error("#qrCodeImage element not found for QR Code modal.");
+
+                if (qrNameEl) qrNameEl.textContent = link; // Display the link as well
+                else console.error("#qrCodeName element not found for QR Code modal.");
+
                 openModal('qrCodeModal');
             })
             .catch(error => {

@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
     // Network & QR
     fetchSubscription: (url) => ipcRenderer.invoke('network:fetch-sub', url),
     generateQRCode: (link) => ipcRenderer.invoke('qr:generate', link),
+    getCountry: (hostname) => ipcRenderer.invoke('system:get-country', hostname), // Added missing function
 
     // Testing
     startTests: (data) => ipcRenderer.send('test:start', data),
