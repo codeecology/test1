@@ -60,8 +60,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     const init = async () => {
-        const initialData = await window.api.getAllData();
-        Object.assign(state, initialData);
+        try {
+            const initialData = await window.api.getAllData();
+            Object.assign(state, initialData);
+        } catch (error) {
+            console.error("Failed to get initial data:", error);
+            showToast(`Error loading initial data: ${error.message || 'Unknown error'}`, 'error');
+            // Initialize with default empty state if loading fails
+            state.configs = [];
+            state.groups = [];
+            state.settings = { concurrentTests: 10, testTimeout: 8, testUrl: 'http://cp.cloudflare.com/generate_204' };
+        }
         state.currentTheme = localStorage.getItem('theme') || 'dark-theme';
         document.body.className = state.currentTheme;
         addEventListeners();
@@ -81,37 +90,120 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderTable = () => {
         const tableBody = $('#configsTableBody');
         const configsToRender = getVisibleConfigs();
-        
-        if (configsToRender.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px;">کانفیگی برای نمایش وجود ندارد.</td></tr>`;
+
+        if (configsToRender.length === 0 && state.searchTerm === '' && state.activeGroupId === 'all') {
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px;">No configurations added yet. Click "Add Config" or "Import".</td></tr>`;
+            return;
+        } else if (configsToRender.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px;">No configurations match the current filter or search term.</td></tr>`;
             return;
         }
 
-        const fragment = document.createDocumentFragment();
-        configsToRender.forEach(config => {
-            const row = document.createElement('tr');
-            row.dataset.id = config.id;
-            if (state.selectedConfigIds.includes(config.id)) row.classList.add('selected');
-            if (config.id === state.activeConnectionId) row.classList.add('connected');
-            
-            const groupName = state.groups.find(g => g.id === config.groupId)?.name || '-';
-            const countryFlag = config.country ? `<img src="https://flagcdn.com/${config.country.toLowerCase()}.svg" class="country-flag" alt="${config.country}">` : '';
+        const existingRowsById = new Map();
+        for (const row of tableBody.children) {
+            if (row.dataset.id) { // Ensure it's a config row, not the "empty" message row
+                existingRowsById.set(row.dataset.id, row);
+            }
+        }
 
-            row.innerHTML = `
-                <td class="checkbox-cell"><input type="checkbox" ${state.selectedConfigIds.includes(config.id) ? 'checked' : ''}></td>
-                <td class="status-cell"><span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span></td>
-                <td title="${config.name}">${config.name}</td>
-                <td class="country-cell">${countryFlag}<span>${config.country || ''}</span></td>
-                <td>${formatDelay(config.delay)}</td>
-                <td>${config.protocol}</td>
-                <td>${config.network}</td>
-            `;
-            fragment.appendChild(row);
+        const fragmentForNewRows = document.createDocumentFragment();
+        const rowsInNewOrder = [];
+
+        configsToRender.forEach(config => {
+            const groupName = state.groups.find(g => g.id === config.groupId)?.name || '-'; // This is not directly used in cell content below but good for context
+            const countryFlag = config.country ? `<img src="https://flagcdn.com/${config.country.toLowerCase()}.svg" class="country-flag" alt="${config.country}">` : '';
+            const isSelected = state.selectedConfigIds.includes(config.id);
+            const isConnected = config.id === state.activeConnectionId;
+
+            let row = existingRowsById.get(config.id);
+            if (row) { // Row exists, update it
+                // Update selection class
+                if (isSelected) row.classList.add('selected'); else row.classList.remove('selected');
+                // Update connected class
+                if (isConnected) row.classList.add('connected'); else row.classList.remove('connected');
+
+                // Update individual cells for changed content
+                // This is more granular and efficient than row.innerHTML if only some data changes often (like status/delay)
+                const cells = row.cells;
+                cells[0].firstChild.checked = isSelected; // Checkbox
+
+                const statusIndicator = cells[1].querySelector('.status-indicator');
+                const statusText = cells[1].querySelector('span:last-child');
+                const currentStatusClass = statusIndicator.className.match(/status-\S+/)?.[0];
+                const newStatusClass = `status-${config.status || 'untested'}`;
+                if (currentStatusClass !== newStatusClass) {
+                    if (currentStatusClass) statusIndicator.classList.remove(currentStatusClass);
+                    statusIndicator.classList.add(newStatusClass);
+                }
+                statusText.textContent = formatStatus(config.status);
+
+                cells[2].textContent = config.name;
+                cells[2].title = config.name;
+
+                const countryCellContent = `${countryFlag}<span>${config.country || ''}</span>`;
+                if (cells[3].innerHTML !== countryCellContent) cells[3].innerHTML = countryCellContent;
+
+                cells[4].textContent = formatDelay(config.delay);
+                cells[5].textContent = config.protocol;
+                cells[6].textContent = config.network;
+
+                existingRowsById.delete(config.id); // Remove from map as it's been processed
+            } else { // Row doesn't exist, create it
+                row = document.createElement('tr');
+                row.dataset.id = config.id;
+                if (isSelected) row.classList.add('selected');
+                if (isConnected) row.classList.add('connected');
+
+                row.innerHTML = `
+                    <td class="checkbox-cell"><input type="checkbox" ${isSelected ? 'checked' : ''}></td>
+                    <td class="status-cell"><span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span></td>
+                    <td title="${config.name}">${config.name}</td>
+                    <td class="country-cell">${countryFlag}<span>${config.country || ''}</span></td>
+                    <td>${formatDelay(config.delay)}</td>
+                    <td>${config.protocol}</td>
+                    <td>${config.network}</td>
+                `;
+                fragmentForNewRows.appendChild(row); // Add to fragment for new rows
+            }
+            rowsInNewOrder.push(row);
         });
-        tableBody.innerHTML = '';
-        tableBody.appendChild(fragment);
+
+        // Remove old rows that are no longer in configsToRender
+        existingRowsById.forEach(oldRow => tableBody.removeChild(oldRow));
+
+        // Append newly created rows
+        if (fragmentForNewRows.childNodes.length > 0) {
+            tableBody.appendChild(fragmentForNewRows);
+        }
+
+        // Re-order rows if needed (simplest way is to re-append them in the correct order)
+        // This is less efficient than precise move operations but better than full innerHTML reset.
+        // For highly dynamic sorting, a library or more complex logic would be better.
+        // However, if sorting mainly happens on full re-render this might be acceptable.
+        // A quick check: if the current order in DOM matches rowsInNewOrder, skip re-appending.
+        let needsReorder = false;
+        const currentDomRows = Array.from(tableBody.children);
+        if (currentDomRows.length !== rowsInNewOrder.length) {
+            needsReorder = true;
+        } else {
+            for (let i = 0; i < rowsInNewOrder.length; i++) {
+                if (currentDomRows[i].dataset.id !== rowsInNewOrder[i].dataset.id) {
+                    needsReorder = true;
+                    break;
+                }
+            }
+        }
+
+        if (needsReorder) {
+            // Clear and re-append in correct order.
+            // This is still better than innerHTML = '' because it preserves existing DOM elements if they are part of rowsInNewOrder.
+            // For rows that were updated in place and are still in order, they are just moved.
+            // For new rows, they are appended.
+            // tableBody.innerHTML = ''; // Avoid this
+            rowsInNewOrder.forEach(r => tableBody.appendChild(r)); // Re-appends all rows in the new sorted order
+        }
     };
-    
+
     const renderGroups = () => {
         const groupList = $('#groupList');
         groupList.innerHTML = `<li class="group-item ${state.activeGroupId === 'all' ? 'active' : ''}" data-group-id="all"><i class="fa-solid fa-globe"></i> <span>${lang('all_configs')}</span></li>`;
@@ -196,7 +288,13 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const url = new URL(link);
                 const name = decodeURIComponent(url.hash.substring(1)) || `${url.hostname}:${url.port}`;
-                const country = await window.api.getCountry(url.hostname);
+                let country = 'XX'; // Default country code
+                try {
+                    country = await window.api.getCountry(url.hostname);
+                } catch (countryError) {
+                    console.warn(`Failed to get country for ${url.hostname}:`, countryError.message);
+                    // Use default 'XX' and proceed
+                }
                 state.configs.push({
                     id: `cfg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     link, name, country,
@@ -306,48 +404,585 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     function addEventListeners() {
-        // ... (All event listeners from previous version, but now they call handlers)
-        // For example:
         $('#openAddModalBtn').addEventListener('click', () => openModal('addConfigModal'));
         $('#settingsBtn').addEventListener('click', () => openModal('settingsModal'));
-        $('#startTestBtn').addEventListener('click', () => handleStartTest());
-        $('#stopTestBtn').addEventListener('click', () => window.api.stopTests());
-        $('#connectBtn').addEventListener('click', handleConnectToggle);
+        $('#saveSettingsBtn').addEventListener('click', handleSaveSettings);
+        $('#addConfigFromTextBtn').addEventListener('click', handleAddConfigFromText);
+        $('#importFileBtn').addEventListener('click', handleImportTextFile);
+        // Add similar listeners for export, fetch subscription, clear all data, etc.
+        // These will call the new handlers defined below.
+
+        $('#startTestBtn').addEventListener('click', () => handleStartTest()); // Assuming handleStartTest is defined
+        $('#stopTestBtn').addEventListener('click', () => window.api.stopTests()); // This is a send, not invoke, usually no return promise to catch here unless API changes
+        $('#connectBtn').addEventListener('click', handleConnectToggle); // Assuming handleConnectToggle is defined
+
+        // Example for a clear all data button if it exists:
+        // $('#clearAllDataBtn').addEventListener('click', handleClearAllData);
+
+        // Group list click (delegated)
+        $('#groupList').addEventListener('click', handleGroupClick);
+
+        // Config table click (delegated for selection, context menu)
+        $('#configsTableBody').addEventListener('click', handleTableClick);
+        $('#configsTableBody').addEventListener('contextmenu', handleTableContextMenu);
         
-        // ... and so on for all other buttons and inputs
+        // Search input
+        $('#searchInput').addEventListener('input', handleSearch);
+
+        // Modal close buttons
+        $$('.modal .close-btn, #modalBackdrop').forEach(el => el.addEventListener('click', closeModal));
+        $('#confirmCancelBtn').addEventListener('click', closeModal); // Specific cancel for confirm
+        $('#promptCancelBtn').addEventListener('click', closeModal);   // Specific cancel for prompt
+
+        // Header sort
+        $('#configsTable th[data-sort]').forEach(th => th.addEventListener('click', handleSortClick));
+
+        // Other buttons
+        $('#deleteUnhealthyBtn').addEventListener('click', handleDeleteUnhealthy);
+        $('#addConfigFromClipboardBtn').addEventListener('click', handleAddFromClipboard); // Assuming handler exists
+        $('#exportAllBtn').addEventListener('click', () => handleExportConfigs(state.configs, 'all-configs.txt')); // Example
+        $('#exportSelectedBtn').addEventListener('click', () => {
+            const selectedConfigs = state.configs.filter(c => state.selectedConfigIds.includes(c.id));
+            handleExportConfigs(selectedConfigs, 'selected-configs.txt');
+        });
+         $('#exportGroupBtn').addEventListener('click', () => {
+            if (state.activeGroupId && state.activeGroupId !== 'all') {
+                const groupConfigs = state.configs.filter(c => c.groupId === state.activeGroupId);
+                const group = state.groups.find(g => g.id === state.activeGroupId);
+                handleExportConfigs(groupConfigs, `${group ? group.name.replace(/\s+/g, '_') : 'group'}-configs.txt`);
+            } else {
+                showToast('Please select a group to export.', 'info');
+            }
+        });
+        $('#fetchSubBtn').addEventListener('click', handleFetchSubscription);
+        $('#addNewGroupBtn').addEventListener('click', handleAddGroup);
+
+
+        // Theme toggle
+        $('#themeToggle').addEventListener('click', () => {
+            state.currentTheme = state.currentTheme === 'dark-theme' ? 'light-theme' : 'dark-theme';
+            document.body.className = state.currentTheme;
+            localStorage.setItem('theme', state.currentTheme);
+        });
+
+        // Language toggle (basic example)
+        $('#langToggle').addEventListener('click', () => {
+            state.currentLanguage = state.currentLanguage === 'en' ? 'fa' : 'en';
+            // In a real app, you'd likely store this preference and re-render all text.
+            updateLangUI(); // Make sure this re-renders all text
+            renderAll(); // Re-render table and other elements that might have lang specific text
+        });
+
+
+        // Context menu action listeners (these would be set up when context menu is shown)
+        // This is conceptual as the context menu is dynamically created.
+        // Actions like 'Copy Link', 'Delete', 'Edit Name' would be handled by functions
+        // called from the context menu click handlers.
     }
 
     // --- Handlers ---
-    // ... (All handlers from previous version, but now they are complete and use custom modals)
-    // For example:
-    const handleEditName = async (config) => {
+    const handleSaveSettings = () => {
+        state.settings.concurrentTests = parseInt($('#concurrentTestsInput').value, 10) || 10;
+        state.settings.testTimeout = parseInt($('#testTimeoutInput').value, 10) || 8;
+        state.settings.testUrl = $('#testUrlInput').value || 'http://cp.cloudflare.com/generate_204';
+        saveAllData();
+        closeModal();
+        showToast('Settings saved!', 'success');
+    };
+
+    const handleAddConfigFromText = () => {
+        const text = $('#addConfigTextArea').value;
+        if (text) {
+            const links = text.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
+            processAndAddConfigs(links); // This now has internal error handling for getCountry
+            $('#addConfigTextArea').value = ''; // Clear textarea
+            closeModal();
+        } else {
+            showToast('Text area is empty.', 'warning');
+        }
+    };
+
+    const handleImportTextFile = () => {
+        window.api.importTextFile()
+            .then(fileContent => {
+                if (fileContent === null) return; // User cancelled dialog
+                const links = fileContent.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
+                processAndAddConfigs(links);
+            })
+            .catch(error => {
+                console.error("Error importing text file:", error);
+                showToast(`Failed to import file: ${error.message || 'Unknown error'}`, 'error');
+            });
+    };
+
+    const handleExportConfigs = (configsToExport, defaultFilename) => {
+        if (!configsToExport || configsToExport.length === 0) {
+            showToast('No configs to export.', 'info');
+            return;
+        }
+        const content = configsToExport.map(c => c.link).join('\n');
+        window.api.exportFile({ defaultPath: defaultFilename, content, isJson: false })
+            .then(success => {
+                if (success) showToast('Configs exported successfully!', 'success');
+                // else user cancelled dialog, no toast needed
+            })
+            .catch(error => {
+                console.error("Error exporting configs:", error);
+                showToast(`Failed to export configs: ${error.message || 'Unknown error'}`, 'error');
+            });
+    };
+
+    const handleFetchSubscription = async () => {
+        const subUrl = $('#subLinkInput').value.trim();
+        if (!subUrl) {
+            showToast('Subscription URL is empty.', 'warning');
+            return;
+        }
+        showToast('Fetching subscription...', 'info');
+        try {
+            const result = await window.api.fetchSubscription(subUrl);
+            if (result.success) {
+                const links = result.data.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
+                processAndAddConfigs(links);
+                $('#subLinkInput').value = ''; // Clear input
+                closeModal(); // Assuming this is in a modal
+            } else {
+                throw new Error(result.error || 'Unknown error fetching subscription');
+            }
+        } catch (error) {
+            console.error("Error fetching subscription:", error);
+            showToast(`Failed to fetch subscription: ${error.message || 'Unknown error'}`, 'error');
+        }
+    };
+
+    const handleClearAllData = async () => {
+        const confirmed = await showConfirm({ title: 'Clear All Data', message: 'Are you sure you want to delete ALL configs, groups, and settings? This action cannot be undone.' });
+        if (!confirmed) return;
+
+        window.api.clearAllData()
+            .then(() => {
+                state.configs = [];
+                state.groups = [];
+                // Reset settings to default or clear them if appropriate
+                state.settings = { concurrentTests: 10, testTimeout: 8, testUrl: 'http://cp.cloudflare.com/generate_204' };
+                state.activeGroupId = 'all';
+                state.selectedConfigIds = [];
+                saveAllData(); // Persist cleared state
+                renderAll();
+                showToast('All data cleared successfully.', 'success');
+            })
+            .catch(error => {
+                console.error("Error clearing all data:", error);
+                showToast(`Failed to clear data: ${error.message || 'Unknown error'}`, 'error');
+            });
+    };
+
+    const handleShowQRCode = (link) => {
+        window.api.generateQRCode(link)
+            .then(dataUrl => {
+                $('#qrCodeImage').src = dataUrl;
+                $('#qrCodeLinkText').textContent = link; // Display the link as well
+                openModal('qrCodeModal');
+            })
+            .catch(error => {
+                console.error("Error generating QR code:", error);
+                showToast(`Failed to generate QR code: ${error.message || 'Unknown error'}`, 'error');
+            });
+    };
+
+    // Placeholder for other handlers that were mentioned in the original code structure
+    const handleStartTest = () => {
+        if (state.isTesting) return;
+        const configsToTest = getVisibleConfigs().filter(c => c.status !== 'testing'); // Or based on selection
+        if (configsToTest.length === 0) {
+            showToast('No configs to test.', 'info');
+            return;
+        }
+        state.isTesting = true;
+        configsToTest.forEach(c => c.status = 'testing'); // Mark as testing
+        renderTable(); // Update UI to show "testing" status
+        updateTestUI();
+        // Reset progress bar if you have one
+        $('#progressBar').style.width = '0%';
+        $('#progressText').textContent = `Testing 0/${configsToTest.length}`;
+
+        window.api.startTests({ configs: configsToTest, settings: state.settings });
+    };
+
+    const handleConnectToggle = () => {
+        if (state.activeConnectionId) { // Currently connected, so disconnect
+            window.api.disconnectProxy();
+        } else { // Not connected, try to connect
+            const selectedConfig = state.configs.find(c => state.selectedConfigIds.length === 1 && c.id === state.selectedConfigIds[0]);
+            if (selectedConfig && selectedConfig.status === 'healthy') {
+                $('#connectionStatus').textContent = lang('connecting');
+                window.api.connectProxy(selectedConfig.link);
+            } else if (state.selectedConfigIds.length !== 1) {
+                showToast('Please select exactly one healthy config to connect.', 'warning');
+            } else {
+                showToast('Selected config is not healthy or not tested.', 'warning');
+            }
+        }
+    };
+
+    const handleGroupClick = (e) => {
+        const targetGroup = e.target.closest('.group-item');
+        if (targetGroup) {
+            const groupId = targetGroup.dataset.groupId;
+            state.activeGroupId = groupId;
+            state.lastSelectedId = null; // Reset last selected ID when group changes
+            state.selectedConfigIds = []; // Clear selection when group changes
+            renderGroups(); // Re-render to update active class
+            renderTable();
+            updateConnectionButton(); // Selection changed
+        }
+    };
+
+    const handleTableClick = (e) => {
+        const row = e.target.closest('tr');
+        if (!row || !row.dataset.id) return;
+        const configId = row.dataset.id;
+        const isCheckbox = e.target.type === 'checkbox';
+
+        if (e.shiftKey && state.lastSelectedId) {
+            const visibleConfigs = getVisibleConfigs();
+            const lastIdx = visibleConfigs.findIndex(c => c.id === state.lastSelectedId);
+            const currentIdx = visibleConfigs.findIndex(c => c.id === configId);
+            if (lastIdx !== -1 && currentIdx !== -1) {
+                const start = Math.min(lastIdx, currentIdx);
+                const end = Math.max(lastIdx, currentIdx);
+                const shiftSelectedIds = visibleConfigs.slice(start, end + 1).map(c => c.id);
+                if (isCheckbox && e.target.checked) { // if checking with shift, add to selection
+                    state.selectedConfigIds = [...new Set([...state.selectedConfigIds, ...shiftSelectedIds])];
+                } else if (isCheckbox && !e.target.checked) { // if unchecking with shift, remove from selection
+                     state.selectedConfigIds = state.selectedConfigIds.filter(id => !shiftSelectedIds.includes(id));
+                } else { // if just clicking row with shift (not checkbox directly)
+                    state.selectedConfigIds = shiftSelectedIds;
+                }
+            }
+        } else if (e.ctrlKey || e.metaKey) { // CMD key for macOS
+            if (state.selectedConfigIds.includes(configId)) {
+                state.selectedConfigIds = state.selectedConfigIds.filter(id => id !== configId);
+            } else {
+                state.selectedConfigIds.push(configId);
+            }
+            state.lastSelectedId = configId;
+        } else {
+            state.selectedConfigIds = [configId];
+            state.lastSelectedId = configId;
+        }
+        renderTable(); // Re-render for selection changes
+        updateConnectionButton();
+    };
+
+    const handleTableContextMenu = (e) => {
+        e.preventDefault();
+        const row = e.target.closest('tr');
+        if (!row || !row.dataset.id) { // Context menu on empty table area or header
+            showContextMenu(e, getGlobalContextMenuItems());
+            return;
+        }
+
+        const clickedConfigId = row.dataset.id;
+        // If right-clicked row is not part of current selection, make it the sole selection
+        if (!state.selectedConfigIds.includes(clickedConfigId)) {
+            state.selectedConfigIds = [clickedConfigId];
+            state.lastSelectedId = clickedConfigId;
+            renderTable(); // Update selection visuals
+            updateConnectionButton();
+        }
+        showContextMenu(e, getConfigContextMenuItems());
+    };
+
+    const handleSearch = (e) => {
+        state.searchTerm = e.target.value;
+        renderTable();
+    };
+
+    const handleSortClick = (e) => {
+        const column = e.currentTarget.dataset.sort;
+        if (state.currentSort.column === column) {
+            state.currentSort.order = state.currentSort.order === 'asc' ? 'desc' : 'asc';
+        } else {
+            state.currentSort.column = column;
+            state.currentSort.order = 'asc';
+        }
+        // Update sort indicators in TH elements (add/remove classes)
+        $$('#configsTable th[data-sort]').forEach(th => {
+            th.classList.remove('sorted-asc', 'sorted-desc');
+            if (th.dataset.sort === column) {
+                th.classList.add(state.currentSort.order === 'asc' ? 'sorted-asc' : 'sorted-desc');
+            }
+        });
+        renderTable();
+    };
+
+    const handleDeleteUnhealthy = async () => {
+        const unhealthyConfigs = state.configs.filter(c => c.status === 'unhealthy' || c.status === 'error' || (c.status === 'untested' && c.delay === -1));
+        if (unhealthyConfigs.length === 0) {
+            showToast('No unhealthy configs to delete.', 'info');
+            return;
+        }
+        const confirmed = await showConfirm({
+            title: 'Delete Unhealthy Configs',
+            message: `Are you sure you want to delete ${unhealthyConfigs.length} unhealthy/error configs?`
+        });
+        if (confirmed) {
+            const unhealthyIds = new Set(unhealthyConfigs.map(c => c.id));
+            state.configs = state.configs.filter(c => !unhealthyIds.has(c.id));
+            state.selectedConfigIds = state.selectedConfigIds.filter(id => !unhealthyIds.has(id));
+            saveAllData();
+            renderAll();
+            showToast(`${unhealthyIds.size} unhealthy configs deleted.`, 'success');
+        }
+    };
+
+    const handleAddFromClipboard = async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+                const links = text.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
+                if (links.length > 0) {
+                    processAndAddConfigs(links);
+                } else {
+                    showToast('Clipboard is empty or contains no valid links.', 'info');
+                }
+            } else {
+                showToast('Clipboard is empty.', 'info');
+            }
+        } catch (error) {
+            console.error("Error reading from clipboard:", error);
+            showToast(`Failed to read from clipboard: ${error.message}`, 'error');
+        }
+    };
+
+    const handleAddGroup = async () => {
+        const groupName = await showPrompt({ title: lang('add_group_title'), message: lang('add_group_message') });
+        if (groupName && groupName.trim() !== '') {
+            const newGroup = {
+                id: `grp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                name: groupName.trim()
+            };
+            state.groups.push(newGroup);
+            saveAllData();
+            renderGroups(); // Just re-render groups or renderAll()
+            showToast(`Group "${newGroup.name}" added.`, 'success');
+        } else if (groupName !== null) { // User submitted empty name
+            showToast('Group name cannot be empty.', 'warning');
+        }
+    };
+
+
+    const handleEditName = async (config) => { // Assumes config object is passed
+        if (!config) { // Might be called from context menu where config is derived from selected IDs
+            if (state.selectedConfigIds.length !== 1) {
+                 showToast("Select a single config to edit its name.", "warning"); return;
+            }
+            config = state.configs.find(c => c.id === state.selectedConfigIds[0]);
+        }
+        if (!config) {
+             showToast("Config not found for editing.", "error"); return;
+        }
+
         const newName = await showPrompt({
             title: lang('edit_name_title'),
             message: lang('edit_name_message'),
             defaultValue: config.name
         });
-        if (newName) {
-            config.name = newName;
+        if (newName !== null && newName.trim() !== '') { // Check for null to allow cancel, and non-empty
+            config.name = newName.trim();
             saveAllData();
             renderTable();
+            showToast('Config name updated.', 'success');
+        } else if (newName !== null) { // User submitted empty name
+             showToast('Config name cannot be empty.', 'warning');
         }
     };
     
-    const handleDeleteGroup = async (groupId) => {
+    const handleDeleteConfig = async () => { // No argument, acts on selection
+        if (state.selectedConfigIds.length === 0) {
+            showToast("No configs selected to delete.", "warning"); return;
+        }
         const confirmed = await showConfirm({
             title: lang('confirm_delete_title'),
-            message: lang('confirm_delete_group')
+            message: `Are you sure you want to delete ${state.selectedConfigIds.length} selected config(s)?`
+        });
+        if (confirmed) {
+            const selectionIdSet = new Set(state.selectedConfigIds);
+            state.configs = state.configs.filter(c => !selectionIdSet.has(c.id));
+            state.selectedConfigIds = [];
+            state.lastSelectedId = null;
+            saveAllData();
+            renderAll();
+            showToast(`${selectionIdSet.size} config(s) deleted.`, 'success');
+        }
+    };
+
+    const handleDeleteGroup = async (groupId) => { // Assumes groupId is passed
+        if (!groupId) { // Might be called from context menu
+             if (state.activeGroupId && state.activeGroupId !== 'all') {
+                groupId = state.activeGroupId;
+            } else {
+                showToast("Select a group to delete.", "warning"); return;
+            }
+        }
+        const groupToDelete = state.groups.find(g => g.id === groupId);
+        if (!groupToDelete) {
+            showToast("Group not found for deletion.", "error"); return;
+        }
+
+        const confirmed = await showConfirm({
+            title: lang('confirm_delete_title'),
+            message: `${lang('confirm_delete_group')} (Name: ${groupToDelete.name})`
         });
         if (confirmed) {
             state.groups = state.groups.filter(g => g.id !== groupId);
-            state.configs.forEach(c => { if (c.groupId === groupId) c.groupId = null; });
+            state.configs.forEach(c => { if (c.groupId === groupId) c.groupId = null; }); // Ungroup configs
+            if (state.activeGroupId === groupId) state.activeGroupId = 'all'; // Reset active group if it was deleted
             saveAllData();
             renderAll();
+            showToast(`Group "${groupToDelete.name}" deleted.`, 'success');
         }
     };
+
+    const handleAssignToGroup = async (groupId) => { // groupId to assign to
+        if (state.selectedConfigIds.length === 0) {
+            showToast("No configs selected.", "warning"); return;
+        }
+        if (groupId === 'new') { // Special value to prompt for new group
+            const groupName = await showPrompt({ title: "New Group Name", message: "Enter name for the new group:" });
+            if (groupName && groupName.trim() !== "") {
+                const newGroup = { id: `grp_${Date.now()}_${Math.random().toString(36).substring(2,9)}`, name: groupName.trim() };
+                state.groups.push(newGroup);
+                groupId = newGroup.id; // Assign to the newly created group
+                renderGroups(); // Update group list
+            } else if (groupName !== null) { // User submitted empty name
+                showToast("Group name cannot be empty.", "warning"); return;
+            } else { // User cancelled prompt
+                return;
+            }
+        }
+
+        let assignedCount = 0;
+        state.configs.forEach(c => {
+            if (state.selectedConfigIds.includes(c.id)) {
+                c.groupId = groupId; // groupId can be null to ungroup
+                assignedCount++;
+            }
+        });
+        saveAllData();
+        renderTable(); // Update table to reflect group changes
+        renderGroups(); // Update group counts
+        const targetGroup = state.groups.find(g => g.id === groupId);
+        const groupNameText = targetGroup ? `"${targetGroup.name}"` : "ungrouped";
+        showToast(`${assignedCount} config(s) assigned to ${groupNameText}.`, 'success');
+    };
     
+    const getGlobalContextMenuItems = () => {
+        // Simplified example
+        return [
+            { label: 'Add Config from Clipboard', action: handleAddFromClipboard },
+            { label: 'Add New Group', action: handleAddGroup },
+            { type: 'separator' },
+            { label: 'Test All Visible', action: () => handleStartTest() /* or more specific logic */ },
+            { label: 'Delete All Unhealthy', action: handleDeleteUnhealthy },
+        ];
+    };
+
+    const getConfigContextMenuItems = () => {
+        // Simplified example, actions would call handlers like handleEditName, handleDeleteConfig etc.
+        const items = [];
+        if (state.selectedConfigIds.length === 1) {
+            const selectedConfig = state.configs.find(c => c.id === state.selectedConfigIds[0]);
+            if(selectedConfig) {
+                 items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(selectedConfig.link).then(() => showToast('Link copied!', 'success')).catch(e => showToast('Failed to copy link.', 'error')) });
+                 items.push({ label: lang('show_qr_code'), action: () => handleShowQRCode(selectedConfig.link) });
+                 items.push({ label: lang('edit_name'), action: () => handleEditName(selectedConfig) });
+            }
+        }
+        items.push({ label: `${lang('test_selected')} (${state.selectedConfigIds.length})`, action: () => { /* TODO */ } });
+
+        const groupSubmenu = state.groups.map(g => ({ label: g.name, action: () => handleAssignToGroup(g.id) }));
+        groupSubmenu.push({ type: 'separator' });
+        groupSubmenu.push({ label: 'New Group...', action: () => handleAssignToGroup('new')});
+        if (state.selectedConfigIds.some(id => state.configs.find(c=>c.id===id)?.groupId !== null)) { // Only show if some are grouped
+             groupSubmenu.push({ label: 'Ungroup', action: () => handleAssignToGroup(null) });
+        }
+        items.push({ label: lang('assign_to_group'), submenu: groupSubmenu });
+
+        items.push({ type: 'separator' });
+        items.push({ label: `${lang('delete')} (${state.selectedConfigIds.length})`, action: () => handleDeleteConfig() });
+        return items;
+    };
+
+
     // --- IPC Listeners ---
-    // ... (All IPC listeners from previous version, fully implemented)
+    window.api.onTestResult((result) => {
+        const config = state.configs.find(c => c.id === result.id);
+        if (config) {
+            config.delay = result.delay;
+            config.status = result.delay > -1 ? 'healthy' : (result.error ? 'error' : 'unhealthy');
+            if (result.error) config.errorMessage = result.error; else delete config.errorMessage;
+        }
+        renderTable(); // Could be optimized to update only one row
+        updateStatusBar();
+    });
+
+    window.api.onTestProgress(({ progress, total, completed }) => {
+        state.isTesting = progress < 100;
+        $('#progressBar').style.width = `${progress}%`;
+        $('#progressText').textContent = `Testing ${completed}/${total} (${Math.round(progress)}%)`;
+        if (!state.isTesting) { // Ensure UI updates when progress hits 100%
+            $('#progressText').textContent = `Test complete. Total: ${total}, Healthy: ${state.configs.filter(c => c.status === 'healthy').length}`;
+        }
+        updateTestUI();
+    });
+
+    window.api.onTestFinish(() => {
+        state.isTesting = false;
+        // Final update to all statuses that might still be 'testing' if stop was abrupt
+        state.configs.forEach(c => { if (c.status === 'testing') c.status = 'untested'; });
+        renderTable();
+        updateTestUI();
+        updateStatusBar();
+         $('#progressText').textContent = `Test complete. Total: ${state.configs.length}, Healthy: ${state.configs.filter(c => c.status === 'healthy').length}`;
+        showToast('All tests finished!', 'success');
+    });
+
+    window.api.onProxyStatusChange(({ isConnected, error }) => {
+        if (isConnected) {
+            state.activeConnectionId = state.selectedConfigIds.length === 1 ? state.selectedConfigIds[0] : null; // Assuming connection was from a single selection
+            // If activeConnectionId is somehow null here but we are connected, we need a way to know which config it is.
+            // This might require the main process to send back the ID of the config it connected to.
+            // For now, if selection changed before status update, this might be imperfect.
+            if (!state.activeConnectionId) {
+                // This case needs more robust handling; perhaps main sends back the link/ID it connected with.
+                console.warn("Proxy connected, but renderer couldn't determine activeConnectionId from selection.");
+            }
+        } else {
+            state.activeConnectionId = null;
+            if (error) {
+                showToast(`Connection failed: ${error}`, 'error');
+            } else {
+                showToast('Disconnected.', 'info');
+            }
+        }
+        renderTable(); // To update 'connected' class on rows
+        updateConnectionButton();
+    });
+
+    // FEATURE: Live Ping (Idea #2)
+    window.api.onProxyLivePingResult(({ delay }) => {
+        const pingIndicator = $('#livePingStatus');
+        if (delay > -1) {
+            pingIndicator.textContent = `Ping: ${delay}ms`;
+            pingIndicator.className = delay < 500 ? 'status-healthy' : (delay < 1500 ? 'status-average' : 'status-slow');
+        } else {
+            pingIndicator.textContent = 'Ping: N/A';
+            pingIndicator.className = 'status-error';
+        }
+    });
+
 
     init();
 });
