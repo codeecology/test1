@@ -460,22 +460,13 @@ tbody tr.connected:hover {
     box-shadow: 0 8px 30px var(--shadow-color); /* Enhanced shadow */
     width: 90%;
     max-width: 550px; /* Slightly wider max-width */
-    display: none; /* Hide modals by default */
+    display: flex;
     flex-direction: column;
     transform: scale(0.95); /* For animation */
-    opacity: 0; /* Start hidden for fade-in */
-    transition: transform var(--transition-slow), opacity var(--transition-slow);
+    transition: transform var(--transition-slow);
     border: 1px solid var(--border-color);
-    position: relative; /* Ensure z-index works if multiple modals are accidentally active */
-    z-index: 101; /* Above backdrop's potential pseudo-elements if any, but direct children */
 }
-
-/* When a modal is active within an active backdrop */
-.modal-backdrop.active .modal.active {
-    display: flex; /* Or block, depending on content. Flex is used by current modal styling. */
-    transform: scale(1);
-    opacity: 1;
-}
+.modal-backdrop.active .modal { transform: scale(1); }
 
 .modal.small-modal { max-width: 450px; }
 .modal-header {

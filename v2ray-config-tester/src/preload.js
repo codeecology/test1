@@ -9,13 +9,12 @@ contextBridge.exposeInMainWorld('api', {
 
     // File System & Dialogs
     importTextFile: () => ipcRenderer.invoke('file:import-text'),
-    importJsonFile: () => ipcRenderer.invoke('file:import-json'),
+    importJsonFile: () => ipcRenderer.invoke('file:import-json'), // Added for JSON import
     exportFile: (options) => ipcRenderer.invoke('file:export', options),
 
     // Network & QR
     fetchSubscription: (url) => ipcRenderer.invoke('network:fetch-sub', url),
     generateQRCode: (link) => ipcRenderer.invoke('qr:generate', link),
-    getCountry: (hostname) => ipcRenderer.invoke('system:get-country', hostname), // Added missing function
 
     // Testing
     startTests: (data) => ipcRenderer.send('test:start', data),
