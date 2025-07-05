@@ -151,13 +151,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (currentStatusClass) statusIndicator.classList.remove(currentStatusClass);
                         statusIndicator.classList.add(newStatusClass);
                     }
+                    // Ensure status-indicator class is present if it was missing but the element was found
+                    if (!statusIndicator.classList.contains('status-indicator')) {
+                        statusIndicator.classList.add('status-indicator');
+                    }
                     statusText.textContent = formatStatus(config.status);
                 } else {
-                    // This case should ideally not happen if rows are always created with the correct structure.
-                    // Log an error and potentially set a default display for the cell.
-                    console.error(`renderTable: Could not find .status-indicator or status text span for config ID: ${config.id}. Cell HTML:`, statusCell.innerHTML);
-                    // Fallback: Update the whole cell content if its structure is compromised
-                    statusCell.innerHTML = `<span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span>`;
+                    console.error(`renderTable: Status cell for config ID: ${config.id} missing expected children. Rebuilding. Cell HTML:`, statusCell.innerHTML);
+                    // Forcefully rebuild the cell's children
+                    while (statusCell.firstChild) {
+                        statusCell.removeChild(statusCell.firstChild);
+                    }
+                    const newIndicatorSpan = document.createElement('span');
+                    newIndicatorSpan.classList.add('status-indicator');
+                    newIndicatorSpan.classList.add(`status-${config.status || 'untested'}`);
+
+                    const newStatusTextSpan = document.createElement('span');
+                    newStatusTextSpan.textContent = formatStatus(config.status);
+
+                    statusCell.appendChild(newIndicatorSpan);
+                    statusCell.appendChild(newStatusTextSpan);
                 }
 
                 cells[2].textContent = config.name;
