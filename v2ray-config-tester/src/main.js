@@ -140,12 +140,40 @@ ipcMain.handle('file:import-text', async () => {
     if (canceled || !filePaths.length) return null;
     return fs.readFileSync(filePaths[0], 'utf-8');
 });
+
+ipcMain.handle('file:import-json', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+        title: 'Import Data from JSON',
+        properties: ['openFile'],
+        filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+    if (canceled || !filePaths.length) {
+        return { success: false, error: 'File selection canceled.' };
+    }
+    try {
+        const filePath = filePaths[0];
+        const fileContent = fs.readFileSync(filePath, 'utf-8');
+        return { success: true, data: fileContent };
+    } catch (error) {
+        console.error(`Failed to read JSON file: ${error.message}`);
+        return { success: false, error: `Failed to read file: ${error.message}` };
+    }
+});
+
 ipcMain.handle('file:export', async (event, { defaultPath, content, isJson = false }) => {
     const filters = isJson ? [{ name: 'JSON Files', extensions: ['json'] }] : [{ name: 'Text Files', extensions: ['txt'] }];
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, { title: 'ذخیره فایل', defaultPath, filters });
     if (!canceled && filePath) {
-        fs.writeFileSync(filePath, content);
-        return true;
+        try {
+            fs.writeFileSync(filePath, content);
+            return true;
+        } catch (error) {
+            console.error(`Failed to write file '${filePath}':`, error);
+            // Optionally, communicate this error back to the renderer process
+            // For example, by throwing the error or returning an object like { success: false, error: message }
+            // For now, returning false is consistent with cancellation. The console error provides debug info.
+            return false;
+        }
     }
     return false;
 });
@@ -155,9 +183,19 @@ ipcMain.handle('network:fetch-sub', async (event, url) => {
     try {
         const response = await axios.get(url, { timeout: 15000 });
         return { success: true, data: Buffer.from(response.data, 'base64').toString('utf-8') };
-    } catch (error) { return { success: false, error: error.message }; }
+    } catch (error) {
+        console.error(`Failed to fetch subscription from ${url}:`, error.message);
+        return { success: false, error: error.message };
+    }
 });
-ipcMain.handle('qr:generate', async (event, link) => qrcode.toDataURL(link, { width: 300, margin: 2 }));
+ipcMain.handle('qr:generate', async (event, link) => {
+    try {
+        return await qrcode.toDataURL(link, { width: 300, margin: 2 });
+    } catch (error) {
+        console.error(`Failed to generate QR code for link "${link}":`, error.message);
+        throw error; // Re-throw to be caught by IPC caller if it handles errors
+    }
+});
 // FEATURE: Get Country from Hostname (Idea #8)
 ipcMain.handle('system:get-country', async (event, hostname) => {
     try {
@@ -165,6 +203,7 @@ ipcMain.handle('system:get-country', async (event, hostname) => {
         const countryData = ipCountry.lookup(address);
         return countryData ? countryData.country : 'XX';
     } catch (error) {
+        console.warn(`Failed to get country for hostname "${hostname}": ${error.message}. Returning 'XX'.`);
         return 'XX'; // Return a placeholder on error
     }
 });
@@ -392,13 +431,19 @@ function stopLivePing() {
 }
 
 function enableSystemProxy(port) {
+    if (process.platform !== 'win32') {
+        const unsupportedPlatformError = "Automatic system proxy setting is only supported on Windows. Please configure your system proxy manually.";
+        console.warn(unsupportedPlatformError);
+        return Promise.reject(new Error(unsupportedPlatformError));
+    }
     const command = `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 1 /f && reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer /t REG_SZ /d "socks=127.0.0.1:${port}" /f`;
     return new Promise((resolve, reject) => {
         exec(command, (error, stdout, stderr) => {
             if (error) {
-                console.error(`Error enabling system proxy: ${error.message}`);
-                console.error(`stderr: ${stderr}`);
-                reject(error);
+                const enableErrorMsg = `Failed to enable system proxy. Please check if you have the necessary permissions or if another program is controlling proxy settings. Error: ${error.message}`;
+                console.error(enableErrorMsg);
+                if (stderr) console.error(`Enable proxy stderr: ${stderr}`);
+                reject(new Error(enableErrorMsg));
                 return;
             }
             // console.log(`System proxy enabled: ${stdout}`);
@@ -408,16 +453,24 @@ function enableSystemProxy(port) {
 }
 
 function disableSystemProxy() {
+    if (process.platform !== 'win32') {
+        // For non-Windows, if we didn't enable it, we arguably don't need to disable it.
+        // However, if called, it should indicate it's a no-op or unsupported.
+        const unsupportedPlatformError = "Automatic system proxy setting is only supported on Windows.";
+        console.warn(unsupportedPlatformError);
+        return Promise.resolve(); // Resolve gracefully as no action is taken or needed.
+    }
     const command = `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`;
     return new Promise((resolve, reject) => {
         exec(command, (error, stdout, stderr) => {
             if (error) {
-                // It's possible the proxy was already disabled or keys don't exist.
-                // Depending on strictness, this might not always be a critical error to reject for.
-                // However, for consistency in knowing the command failed, we reject.
-                console.warn(`Error disabling system proxy: ${error.message}`);
-                console.warn(`stderr: ${stderr}`);
-                reject(error); // Or resolve if "errors" here are common and non-critical
+                // This might not always be critical, e.g., if proxy was already disabled.
+                const disableErrorMsg = `Warning: Failed to automatically disable system proxy. It might already be disabled, or there could be a permission issue. Error: ${error.message}`;
+                console.warn(disableErrorMsg);
+                if (stderr) console.warn(`Disable proxy stderr: ${stderr}`);
+                // Resolve still, as failing to disable (especially if already disabled) is often non-critical for app shutdown.
+                // If strict error handling is needed, this could be a reject.
+                resolve();
                 return;
             }
             // console.log(`System proxy disabled: ${stdout}`);
@@ -448,102 +501,109 @@ function generateTempConfig(link, port, filename) {
 }
 
 function parseConfigLink(link, port) {
+    if (!link || typeof link !== 'string' || link.trim() === '') {
+        return { success: false, error: "Config link is empty or invalid." };
+    }
+
+    let url;
     try {
-        if (!link || typeof link !== 'string' || link.trim() === '') {
-            return { success: false, error: "Config link is empty or not a string." };
+        url = new URL(link);
+    } catch (e) {
+        // This catch handles fundamentally invalid URL structures before protocol-specific parsing
+        console.error(`Invalid URL structure for link "${link}": ${e.message}`);
+        return { success: false, error: `Invalid link format: ${e.message}` };
+    }
+
+    const protocol = url.protocol.slice(0, -1).toLowerCase();
+
+    let outbound = {
+        protocol,
+        settings: {},
+        streamSettings: {
+            // Common defaults, might be overridden by specific protocol logic or URL params
+            network: url.searchParams.get('type') || 'tcp', // Default network type
+            security: url.searchParams.get('security') || 'none', // Default security
         }
+    };
 
-        const url = new URL(link); // This can throw if the link is not a valid URL structure
-        const protocol = url.protocol.slice(0, -1).toLowerCase(); // Normalize protocol to lowercase
-
-        let outbound = {
-            protocol,
-            settings: {},
-            streamSettings: {
-                // Common defaults, might be overridden by specific protocol logic or URL params
-                network: url.searchParams.get('type') || 'tcp',
-                security: url.searchParams.get('security') || 'none', // 'none' or 'tls' typically
-            }
-        };
-
+    try { // Wrap protocol-specific parsing in a try-catch for unexpected errors
         switch (protocol) {
             case 'vless':
-                if (!url.username) return { success: false, error: "VLESS ID (username) is missing." };
-                if (!url.hostname) return { success: false, error: "VLESS address (hostname) is missing." };
-                if (!url.port) return { success: false, error: "VLESS port is missing." };
+                if (!url.username) return { success: false, error: "Invalid VLESS link: User ID (UUID) is missing." };
+                if (!url.hostname) return { success: false, error: "Invalid VLESS link: Address (hostname) is missing." };
+                if (!url.port) return { success: false, error: "Invalid VLESS link: Port is missing." };
+
                 outbound.settings.vnext = [{
                     address: url.hostname,
                     port: +url.port,
                     users: [{
-                        id: url.username, // This is the UUID
+                        id: url.username, // UUID
                         encryption: url.searchParams.get('encryption') || 'none',
-                        flow: url.searchParams.get('flow') || undefined // flow can be absent
+                        flow: url.searchParams.get('flow') || undefined
                     }]
                 }];
                 // VLESS specific stream settings from URL parameters
-                outbound.streamSettings.network = url.searchParams.get('type') || 'tcp';
-                outbound.streamSettings.security = url.searchParams.get('security') || 'none';
+                // network and security are already pre-filled from searchParams or defaulted
                 if (outbound.streamSettings.security === 'tls' || outbound.streamSettings.security === 'xtls') {
                     outbound.streamSettings.tlsSettings = {
                         serverName: url.searchParams.get('sni') || url.searchParams.get('host') || url.hostname,
                         allowInsecure: (url.searchParams.get('allowInsecure') === '1' || url.searchParams.get('allowInsecure') === 'true'),
-                        // XTLS specific, if applicable
-                        // flow: url.searchParams.get('xtlsflow') || undefined,
                     };
                     if (url.searchParams.get('fp')) {
                         outbound.streamSettings.tlsSettings.fingerprint = url.searchParams.get('fp');
                     }
-                    if (url.searchParams.get('alpn')) {
-                        outbound.streamSettings.tlsSettings.alpn = url.searchParams.get('alpn').split(',');
+                    const alpnParamVless = url.searchParams.get('alpn');
+                    if (alpnParamVless) {
+                        outbound.streamSettings.tlsSettings.alpn = alpnParamVless.split(',').map(s => s.trim()).filter(Boolean);
                     }
-                     if (url.searchParams.get('pbk')) {
+                    if (url.searchParams.get('pbk')) {
                         outbound.streamSettings.tlsSettings.publicKey = url.searchParams.get('pbk');
                     }
                     if (url.searchParams.get('sid')) {
-                        outbound.streamSettings.tlsSettings.shortId = url.search_params.get('sid');
+                        outbound.streamSettings.tlsSettings.shortId = url.searchParams.get('sid');
                     }
                 }
                 break;
             case 'trojan':
-                if (!url.password && !url.username) return { success: false, error: "Trojan password (or username) is missing." };
-                if (!url.hostname) return { success: false, error: "Trojan address (hostname) is missing." };
-                if (!url.port) return { success: false, error: "Trojan port is missing." };
-                outbound.settings.servers = [{ // Trojan config structure uses 'servers' array
+                if (!url.password && !url.username) return { success: false, error: "Invalid Trojan link: Password is missing." };
+                if (!url.hostname) return { success: false, error: "Invalid Trojan link: Address (hostname) is missing." };
+                if (!url.port) return { success: false, error: "Invalid Trojan link: Port is missing." };
+
+                outbound.settings.servers = [{
                     address: url.hostname,
                     port: +url.port,
-                    password: url.password || url.username // Trojan password can be in username field for some formats
+                    password: url.password || url.username
                 }];
-                // Trojan specific stream settings from URL parameters
-                outbound.streamSettings.network = url.searchParams.get('type') || 'tcp'; // Usually tcp for standard trojan, ws for trojan-go
-                outbound.streamSettings.security = url.searchParams.get('security') || 'none'; // Often 'tls' for trojan
+                // Trojan specific stream settings
                 if (outbound.streamSettings.security === 'tls') {
                     outbound.streamSettings.tlsSettings = {
                         serverName: url.searchParams.get('sni') || url.searchParams.get('host') || url.hostname,
                         allowInsecure: (url.searchParams.get('allowInsecure') === '1' || url.searchParams.get('allowInsecure') === 'true'),
                     };
-                     if (url.searchParams.get('alpn')) {
-                        outbound.streamSettings.tlsSettings.alpn = url.searchParams.get('alpn').split(',');
+                    const alpnParamTrojan = url.searchParams.get('alpn');
+                    if (alpnParamTrojan) {
+                        outbound.streamSettings.tlsSettings.alpn = alpnParamTrojan.split(',').map(s => s.trim()).filter(Boolean);
                     }
                 }
                 break;
             case 'vmess':
                 let decoded;
                 try {
-                    // Remove vmess:// prefix and decode
                     const b64decoded = Buffer.from(link.substring(8), 'base64').toString('utf-8');
                     decoded = JSON.parse(b64decoded);
                 } catch (e) {
-                    return { success: false, error: `VMess base64/JSON parsing error: ${e.message}` };
+                    return { success: false, error: `Invalid VMess link: Base64/JSON parsing failed - ${e.message}` };
                 }
-                if (!decoded.add) return { success: false, error: "VMess address (add) is missing." };
-                if (!decoded.port) return { success: false, error: "VMess port is missing." };
-                if (!decoded.id) return { success: false, error: "VMess ID (id) is missing." };
+
+                if (!decoded.add) return { success: false, error: "Invalid VMess link: Address (add) is missing in JSON." };
+                if (!decoded.port) return { success: false, error: "Invalid VMess link: Port (port) is missing in JSON." };
+                if (!decoded.id) return { success: false, error: "Invalid VMess link: User ID (id) is missing in JSON." };
 
                 outbound.settings.vnext = [{
                     address: decoded.add,
                     port: +decoded.port,
                     users: [{
-                        id: decoded.id, // UUID
+                        id: decoded.id,
                         alterId: decoded.aid !== undefined ? +decoded.aid : 0,
                         security: decoded.scy || 'auto',
                         level: decoded.level !== undefined ? +decoded.level : 0
@@ -551,17 +611,17 @@ function parseConfigLink(link, port) {
                 }];
                 // VMess specific stream settings from the JSON object
                 outbound.streamSettings.network = decoded.net || 'tcp';
-                outbound.streamSettings.security = decoded.tls === 'tls' ? 'tls' : 'none'; // Normalize 'tls' field
+                outbound.streamSettings.security = decoded.tls === 'tls' ? 'tls' : 'none';
 
                 if (outbound.streamSettings.security === 'tls') {
                     outbound.streamSettings.tlsSettings = {
-                        serverName: decoded.sni || decoded.host || decoded.add, // SNI priority: sni > host > add
-                        allowInsecure: (decoded.allowInsecure === '1' || decoded.allowInsecure === true || decoded.verify_certificate === false), // allowInsecure / verify_certificate
+                        serverName: decoded.sni || decoded.host || decoded.add,
+                        allowInsecure: (decoded.allowInsecure === true || decoded.allowInsecure === '1' || decoded.verify_certificate === false),
                     };
                     if (decoded.alpn) {
-                        outbound.streamSettings.tlsSettings.alpn = decoded.alpn.split(',');
+                        outbound.streamSettings.tlsSettings.alpn = decoded.alpn.split(',').map(s => s.trim()).filter(Boolean);
                     }
-                     if (decoded.fp) {
+                    if (decoded.fp) {
                         outbound.streamSettings.tlsSettings.fingerprint = decoded.fp;
                     }
                 }
@@ -575,7 +635,7 @@ function parseConfigLink(link, port) {
                     outbound.streamSettings.tcpSettings = {
                         header: {
                             type: 'http',
-                            request: { // Assuming request, could also be response
+                            request: {
                                 path: (decoded.path && Array.isArray(decoded.path)) ? decoded.path : (decoded.path ? [decoded.path] : ["/"]),
                                 headers: {
                                     Host: (decoded.host && Array.isArray(decoded.host)) ? decoded.host : (decoded.host ? [decoded.host] : [decoded.add])
@@ -589,10 +649,10 @@ function parseConfigLink(link, port) {
                         tti: decoded.tti !== undefined ? +decoded.tti : 50,
                         uplinkCapacity: decoded.uplinkCapacity !== undefined ? +decoded.uplinkCapacity : 5,
                         downlinkCapacity: decoded.downlinkCapacity !== undefined ? +decoded.downlinkCapacity : 20,
-                        congestion: decoded.congestion !== undefined ? decoded.congestion : false,
+                        congestion: decoded.congestion === true || decoded.congestion === 'true', // Ensure boolean
                         readBufferSize: decoded.readBufferSize !== undefined ? +decoded.readBufferSize : 2,
                         writeBufferSize: decoded.writeBufferSize !== undefined ? +decoded.writeBufferSize : 2,
-                        header: { type: decoded.headerType || 'none' }, // 'none', 'srtp', 'utp', 'wechat-video', 'dtls', 'wireguard'
+                        header: { type: decoded.headerType || 'none' },
                         seed: decoded.seed || undefined
                     };
                 } else if (outbound.streamSettings.network === 'quic') {
@@ -603,36 +663,37 @@ function parseConfigLink(link, port) {
                     };
                 } else if (outbound.streamSettings.network === 'grpc') {
                      outbound.streamSettings.grpcSettings = {
-                        serviceName: decoded.path || decoded.serviceName || "", // Path is often used for serviceName in vmess grpc links
-                        multiMode: decoded.mode === 'multi' // check for multiMode
+                        serviceName: decoded.path || decoded.serviceName || "",
+                        multiMode: decoded.mode === 'multi' || decoded.multiMode === true // check for multiMode
                     };
                 }
                 break;
             case 'ss':
                 const firstHashIdx = link.indexOf('#');
-                const linkContent = link.substring(5, firstHashIdx > -1 ? firstHashIdx : undefined);
+                // Ensure linkContent is correctly extracted even if # is not present
+                const linkContent = link.substring(5, firstHashIdx > -1 ? firstHashIdx : link.length);
 
                 const atSymbolIdx = linkContent.lastIndexOf('@');
-                if (atSymbolIdx === -1) return { success: false, error: "Shadowsocks link missing '@' separator." };
+                if (atSymbolIdx === -1) return { success: false, error: "Invalid Shadowsocks link: Missing '@' separator between user_info and server_info." };
 
                 const userInfo = linkContent.substring(0, atSymbolIdx);
                 const serverInfo = linkContent.substring(atSymbolIdx + 1);
 
                 let decodedCredentials;
                 try {
-                    decodedCredentials = Buffer.from(decodeURIComponent(userInfo), 'base64').toString('utf-8').split(':');
+                    // Attempt to decode Base64 user info part first
+                    let tempDecoded = Buffer.from(decodeURIComponent(userInfo), 'base64').toString('utf-8');
+                    decodedCredentials = tempDecoded.split(':');
                     if (decodedCredentials.length < 2) { // method:password
-                         // Try without base64 if it's already plain
-                        decodedCredentials = decodeURIComponent(userInfo).split(':');
-                        if (decodedCredentials.length < 2) {
-                            return { success: false, error: "Shadowsocks credentials (method:password) malformed." };
-                        }
+                        // If split results in less than 2 parts, it might not be base64 or malformed
+                        // Fallback to plain (non-base64) decoding
+                        throw new Error("Potentially not Base64 or malformed.");
                     }
                 } catch (e) {
-                     // If base64 decoding fails, try plain split
+                     // If base64 decoding fails or indicates non-base64, try plain split
                     decodedCredentials = decodeURIComponent(userInfo).split(':');
                     if (decodedCredentials.length < 2) {
-                        return { success: false, error: `Shadowsocks credentials decoding error: ${e.message}` };
+                        return { success: false, error: `Invalid Shadowsocks link: Credentials (method:password) are malformed. Error: ${e.message}` };
                     }
                 }
 
@@ -640,56 +701,53 @@ function parseConfigLink(link, port) {
                 const password = decodedCredentials.slice(1).join(':'); // Handle passwords with colons
 
                 const portSeparatorIdx = serverInfo.lastIndexOf(':');
-                if (portSeparatorIdx === -1) return { success: false, error: "Shadowsocks server info (address:port) malformed." };
+                if (portSeparatorIdx === -1) return { success: false, error: "Invalid Shadowsocks link: Server info (address:port) is malformed." };
 
                 const address = serverInfo.substring(0, portSeparatorIdx);
                 const portStr = serverInfo.substring(portSeparatorIdx + 1);
 
-                if (!address) return { success: false, error: "Shadowsocks address is missing." };
-                if (!portStr || isNaN(parseInt(portStr, 10))) return { success: false, error: "Shadowsocks port is invalid or missing." };
+                if (!address) return { success: false, error: "Invalid Shadowsocks link: Address is missing." };
+                const parsedPort = parseInt(portStr, 10);
+                if (!portStr || isNaN(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
+                    return { success: false, error: "Invalid Shadowsocks link: Port is invalid or missing." };
+                }
 
                 outbound.settings.servers = [{
                     address,
-                    port: +portStr,
+                    port: parsedPort,
                     method: method,
                     password: password
                 }];
-                // Shadowsocks typically doesn't use complex streamSettings in the link itself.
-                // It might have plugins, but those are configured differently.
-                // For Xray, default is TCP.
-                outbound.streamSettings = { network: 'tcp', security: 'none' };
+                outbound.streamSettings = { network: 'tcp', security: 'none' }; // SS typically defaults to TCP
                 break;
             default:
                 return { success: false, error: `Unsupported protocol: ${protocol}` };
         }
 
-        // Apply common stream settings from URL parameters if not already handled by protocol specific logic (e.g. VMess)
-        // This is more for VLESS and Trojan if they use URL params for these.
+        // Apply common stream settings from URL parameters if not already handled by protocol specific logic (e.g. VMess JSON)
+        // This is primarily for VLESS and Trojan if they use URL query parameters for these.
         if (protocol === 'vless' || protocol === 'trojan') {
-            // These might have been set above, this ensures params take precedence or set if not already
-            const urlType = url.searchParams.get('type');
-            if (urlType) outbound.streamSettings.network = urlType;
-
-            const urlSecurity = url.searchParams.get('security');
-            if (urlSecurity) outbound.streamSettings.security = urlSecurity;
+            // network and security are already pre-filled from searchParams or defaulted.
+            // This section refines them or adds transport-specific settings like wsSettings, grpcSettings.
 
             if (outbound.streamSettings.security === 'tls' || outbound.streamSettings.security === 'xtls') {
-                // Initialize tlsSettings if it doesn't exist
+                // tlsSettings might have been partially initialized by VLESS/Trojan specific logic.
+                // Ensure all relevant params are captured.
                 outbound.streamSettings.tlsSettings = outbound.streamSettings.tlsSettings || {};
-                outbound.streamSettings.tlsSettings.serverName = url.searchParams.get('sni') || url.searchParams.get('host') || outbound.settings.vnext?.[0]?.address || outbound.settings.servers?.[0]?.address || url.hostname;
-                outbound.streamSettings.tlsSettings.allowInsecure = (url.searchParams.get('allowInsecure') === '1' || url.searchParams.get('allowInsecure') === 'true');
+                outbound.streamSettings.tlsSettings.serverName = url.searchParams.get('sni') || url.searchParams.get('host') || outbound.streamSettings.tlsSettings.serverName || outbound.settings.vnext?.[0]?.address || outbound.settings.servers?.[0]?.address || url.hostname;
+                outbound.streamSettings.tlsSettings.allowInsecure = (url.searchParams.get('allowInsecure') === '1' || url.searchParams.get('allowInsecure') === 'true') || outbound.streamSettings.tlsSettings.allowInsecure || false;
 
-                const alpn = url.searchParams.get('alpn');
-                if (alpn) outbound.streamSettings.tlsSettings.alpn = alpn.split(',');
+                const alpnParamCommon = url.searchParams.get('alpn');
+                if (alpnParamCommon) outbound.streamSettings.tlsSettings.alpn = alpnParamCommon.split(',').map(s => s.trim()).filter(Boolean);
 
-                const fp = url.searchParams.get('fp');
-                if (fp) outbound.streamSettings.tlsSettings.fingerprint = fp;
+                const fpParam = url.searchParams.get('fp');
+                if (fpParam) outbound.streamSettings.tlsSettings.fingerprint = fpParam;
             }
 
             if (outbound.streamSettings.network === 'ws') {
                 outbound.streamSettings.wsSettings = outbound.streamSettings.wsSettings || {};
                 outbound.streamSettings.wsSettings.path = url.searchParams.get('path') || '/';
-                let hostHeader = url.searchParams.get('host');
+                let hostHeader = url.searchParams.get('host'); // 'host' param for WebSocket Host header
                 if (hostHeader) {
                     outbound.streamSettings.wsSettings.headers = { Host: hostHeader };
                 } else if (outbound.settings.vnext?.[0]?.address) {
@@ -701,36 +759,34 @@ function parseConfigLink(link, port) {
                 }
             } else if (outbound.streamSettings.network === 'grpc') {
                 outbound.streamSettings.grpcSettings = outbound.streamSettings.grpcSettings || {};
-                outbound.streamSettings.grpcSettings.serviceName = url.searchParams.get('serviceName') || '';
-                if (url.searchParams.get('mode') === 'multi') {
+                outbound.streamSettings.grpcSettings.serviceName = url.searchParams.get('serviceName') || url.searchParams.get('path') || ''; // 'path' can also be used for serviceName
+                if (url.searchParams.get('mode') === 'multi' || url.searchParams.get('multiMode') === 'true') {
                     outbound.streamSettings.grpcSettings.multiMode = true;
                 }
             }
-            // Add other transport types like httpupgrade, kcp, quic if needed, based on URL params.
+            // TODO: Add other transport types like httpupgrade, kcp, quic if they are commonly configured via URL params for VLESS/Trojan
         }
-
 
         return {
             success: true,
             config: {
-                log: { loglevel: 'warning' }, // Consider making this configurable via settings later
+                log: { loglevel: 'warning' },
                 inbounds: [{
-                    port: port, // Use the passed port argument for the inbound SOCKS proxy
-                    listen: '127.0.0.1', // Listen only on localhost for security
+                    port: port,
+                    listen: '127.0.0.1',
                     protocol: 'socks',
                     settings: {
-                        auth: 'noauth', // No authentication for the local SOCKS proxy
-                        udp: true,      // Enable UDP relay
-                        ip: '127.0.0.1' // Specify IP for SOCKS server
+                        auth: 'noauth',
+                        udp: true,
+                        ip: '127.0.0.1'
                     }
                 }],
-                outbounds: [outbound] // The fully configured outbound
+                outbounds: [outbound]
             }
         };
     } catch (e) {
-        // This top-level catch handles errors like `new URL(link)` failing for fundamentally invalid links
-        // or other unexpected errors during parsing.
-        console.error(`Critical Config Parse Error for link "${link}":`, e.message, e.stack);
-        return { success: false, error: `Invalid link format or critical parsing error: ${e.message}` };
+        // This top-level catch handles unexpected errors during protocol-specific parsing.
+        console.error(`Critical Config Parse Error for link "${link}" during protocol ${protocol} processing:`, e.message, e.stack);
+        return { success: false, error: `Error parsing ${protocol} config: ${e.message}` };
     }
 }

@@ -10,14 +10,14 @@
   "author": "Your Professional Developer",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.8",
+    "axios": "^1.7.2",
     "electron-store": "^8.2.0",
     "ip-country": "^1.0.2",
     "qrcode": "^1.5.3",
-    "socks-proxy-agent": "^8.0.3"
+    "socks-proxy-agent": "^8.0.4"
   },
   "devDependencies": {
-    "electron": "^29.1.5",
+    "electron": "^29.3.0",
     "electron-builder": "^24.13.3"
   },
   "build": {

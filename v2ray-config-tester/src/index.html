@@ -71,11 +71,11 @@
                     <span id="connectionStatus" data-lang="not_connected">متصل نیستید</span>
                     <!-- FEATURE: Live ping chart placeholder -->
                     <div id="livePingContainer" class="live-ping-container">
-                        <span id="livePingText"></span>
+                        <span id="livePingStatus"></span>
                     </div>
                 </div>
                 <div class="status-center">
-                     <progress id="testProgressBar" value="0" max="100"></progress>
+                     <progress id="progressBar" value="0" max="100"></progress>
                      <span id="progressText">آماده</span>
                 </div>
                 <div class="status-right">
@@ -117,6 +117,10 @@
                     <button id="exportHealthyBtn"><i class="fa-solid fa-file-arrow-down"></i> خروجی سالم‌ها (Text)</button>
                     <button id="clearAllDataBtn" class="danger-btn"><i class="fa-solid fa-trash-can"></i> حذف تمام داده‌ها</button>
                 </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancelSettingsBtn" class="secondary-btn" data-lang="cancel">لغو</button>
+                <button id="saveSettingsBtn" class="primary-btn" data-lang="save">ذخیره</button>
             </div>
         </div>
 

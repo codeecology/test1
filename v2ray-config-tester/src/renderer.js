@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (addedCount > 0) {
             saveAllData();
-            renderAll();
+            renderAll(); // renderAll -> renderTable -> updateSelectAllCheckboxState
             showToast(`${addedCount} ${lang('toast_configs_added')}`, 'success');
         }
     };
@@ -320,6 +320,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Modals, Toasts, Context Menu ---
+    // renderAll already calls renderTable, which calls updateSelectAllCheckboxState.
+    // So functions calling renderAll don't need a separate call to updateSelectAllCheckboxState.
+
     const openModal = (modalId) => {
         if (modalId === 'settingsModal') {
             $('#concurrentTestsInput').value = state.settings.concurrentTests;
@@ -421,7 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
         $('#configsTableBody').addEventListener('click', handleTableClick);
         $('#configsTableBody').addEventListener('contextmenu', handleTableContextMenu);
         $('#configsTable th[data-sort]').forEach(th => th.addEventListener('click', handleSortClick));
-        // Listener for #selectAllCheckbox would go here if implemented
+        $('#selectAllCheckbox').addEventListener('change', handleSelectAllToggle);
+
 
         // Status bar
         $('#connectBtn').addEventListener('click', handleConnectToggle);
@@ -448,10 +452,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // If there's a generic "OK" or "Apply" button for settings modal, it should call handleSaveSettings.
         // The current settings modal in HTML doesn't have a general save/apply button, only data action buttons.
         // Let's add a listener to the settings modal's close button as a *proxy* for saving. This is not ideal UX but fixes the missing link.
-        $$('.close-modal-btn[data-modal-id="settingsModal"]').forEach(btn => btn.addEventListener('click', handleSaveSettings)); // Save on close
+        // TODO: This will be changed later in UX improvements for settings modal.
+        // $$('.close-modal-btn[data-modal-id="settingsModal"]').forEach(btn => btn.addEventListener('click', handleSaveSettings)); // Save on close
+        // Settings Modal new buttons
+        $('#saveSettingsBtn').addEventListener('click', () => {
+            handleSaveSettings(); // Saves the settings
+            closeModal(); // Then closes the modal
+        });
+        $('#cancelSettingsBtn').addEventListener('click', () => {
+            // Restore original settings values to inputs before closing if they were changed without saving
+            // This is optional, but good UX. For simplicity here, just close.
+            closeModal();
+        });
 
-        $('#importDataBtn').addEventListener('click', () => { /* TODO: Handler for importDataBtn (JSON import) */ showToast('JSON import not yet implemented.', 'info'); });
-        $('#exportDataBtn').addEventListener('click', () => { /* TODO: Handler for exportDataBtn (JSON export) */ showToast('JSON export not yet implemented.', 'info'); });
+
+        $('#importDataBtn').addEventListener('click', handleImportData);
+        $('#exportDataBtn').addEventListener('click', handleExportData);
         $('#exportHealthyBtn').addEventListener('click', () => { // Export healthy configs as text
             const healthyConfigs = state.configs.filter(c => c.status === 'healthy');
             handleExportConfigs(healthyConfigs, 'healthy-configs.txt');
@@ -488,6 +504,74 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Handlers ---
+    const handleImportData = async () => {
+        try {
+            const result = await window.api.importJsonFile();
+            if (!result || !result.success) {
+                if (result && result.error && result.error !== 'File selection canceled.') { // Check error message
+                    showToast(`Error importing JSON: ${result.error}`, 'error');
+                } // Do not show toast if user simply canceled.
+                return;
+            }
+
+            const importedData = JSON.parse(result.data);
+
+            // Basic validation
+            if (typeof importedData !== 'object' || importedData === null ||
+                !Array.isArray(importedData.configs) ||
+                !Array.isArray(importedData.groups) ||
+                typeof importedData.settings !== 'object' || importedData.settings === null) {
+                showToast('Invalid JSON structure for import. Expected configs, groups, and settings.', 'error');
+                return;
+            }
+
+            // Further validation can be added here (e.g. checking individual config structures)
+            // For now, assume the structure is generally correct if keys exist and are of right type.
+             // A more robust import might validate each config/group/setting item.
+
+            state.configs = importedData.configs.map(c => ({ // Ensure default fields if missing from older exports
+                ...c,
+                status: c.status || 'untested',
+                delay: c.delay === undefined ? null : c.delay,
+                country: c.country || 'XX'
+            }));
+            state.groups = importedData.groups; // Assuming groups structure is stable
+            state.settings = { // Merge with defaults to ensure all settings fields exist
+                concurrentTests: 10,
+                testTimeout: 8,
+                testUrl: 'http://cp.cloudflare.com/generate_204',
+                ...importedData.settings
+            };
+
+            saveAllData();
+            renderAll(); // Re-render everything with new data
+            closeModal(); // Close settings modal if open
+            showToast('Data imported successfully!', 'success');
+
+        } catch (error) {
+            console.error("Failed to import data from JSON:", error);
+            showToast(`Failed to import JSON: ${error.message || 'Invalid file content.'}`, 'error');
+        }
+    };
+
+    const handleExportData = () => {
+        const dataToExport = {
+            configs: state.configs,
+            groups: state.groups,
+            settings: state.settings,
+        };
+        const content = JSON.stringify(dataToExport, null, 2); // Pretty print JSON
+        window.api.exportFile({ defaultPath: 'ultimate-v2ray-tester-backup.json', content, isJson: true })
+            .then(success => {
+                if (success) showToast('Data exported successfully!', 'success');
+                // else: User cancelled dialog, no toast needed
+            })
+            .catch(error => {
+                console.error("Error exporting data:", error);
+                showToast(`Failed to export data: ${error.message || 'Unknown error'}`, 'error');
+            });
+    };
+
     const handleSaveSettings = () => {
         // This function is now called when the settings modal is closed.
         const concurrentTests = parseInt($('#concurrentTestsInput').value, 10);
@@ -514,6 +598,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // closeModal() will be handled by the button that calls this, or by generic modal close.
     };
+
+    const handleSelectAllToggle = (e) => {
+        const isChecked = e.target.checked;
+        const visibleConfigs = getVisibleConfigs();
+        if (isChecked) {
+            state.selectedConfigIds = visibleConfigs.map(c => c.id);
+            if (visibleConfigs.length > 0) {
+                state.lastSelectedId = visibleConfigs[visibleConfigs.length - 1].id;
+            } else {
+                state.lastSelectedId = null;
+            }
+        } else {
+            state.selectedConfigIds = [];
+            state.lastSelectedId = null;
+        }
+        renderTable(); // Re-render to show selection changes and update individual checkboxes
+        updateConnectionButton();
+    };
+
+    const updateSelectAllCheckboxState = () => {
+        const selectAllCheckbox = $('#selectAllCheckbox');
+        if (!selectAllCheckbox) return;
+        const visibleConfigs = getVisibleConfigs();
+        if (visibleConfigs.length === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.disabled = true; // Disable if no items to select
+            return;
+        }
+        selectAllCheckbox.disabled = false; // Enable if there are items
+
+        const allVisibleSelected = visibleConfigs.every(c => state.selectedConfigIds.includes(c.id));
+        if (allVisibleSelected) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else if (state.selectedConfigIds.some(id => visibleConfigs.find(c => c.id === id))) {
+            selectAllCheckbox.checked = false; // Or true, depending on desired indeterminate behavior
+            selectAllCheckbox.indeterminate = true;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        }
+    };
+
+    // Modify renderTable and other functions that change selection/visibility to call updateSelectAllCheckboxState
+    // For example, at the end of renderTable:
+    // Original renderTable() ends here...
+    updateSelectAllCheckboxState(); // Call this after table is rendered
+    // Also call it after handleSearch, handleGroupClick, handleDeleteConfig, etc.
 
     const handleAddConfigFromText = () => { // Now correctly associated with addFromPasteBtn
         const text = $('#pasteArea').value; // Corrected ID: pasteArea
@@ -925,7 +1058,30 @@ document.addEventListener('DOMContentLoaded', () => {
                  items.push({ label: lang('edit_name'), action: () => handleEditName(selectedConfig) });
             }
         }
-        items.push({ label: `${lang('test_selected')} (${state.selectedConfigIds.length})`, action: () => { /* TODO */ } });
+
+        if (state.selectedConfigIds.length > 0) {
+            items.push({
+                label: `${lang('test_selected')} (${state.selectedConfigIds.length})`,
+                action: () => {
+                    if (state.isTesting) {
+                        showToast('A test is already in progress.', 'warning');
+                        return;
+                    }
+                    const configsToTest = state.configs.filter(c => state.selectedConfigIds.includes(c.id) && c.status !== 'testing');
+                    if (configsToTest.length === 0) {
+                        showToast('Selected configs are already tested or currently testing.', 'info');
+                        return;
+                    }
+                    state.isTesting = true;
+                    configsToTest.forEach(c => c.status = 'testing');
+                    renderTable();
+                    updateTestUI();
+                    $('#progressBar').style.width = '0%';
+                    $('#progressText').textContent = `Testing 0/${configsToTest.length}`;
+                    window.api.startTests({ configs: configsToTest, settings: state.settings });
+                }
+            });
+        }
 
         const groupSubmenu = state.groups.map(g => ({ label: g.name, action: () => handleAssignToGroup(g.id) }));
         groupSubmenu.push({ type: 'separator' });

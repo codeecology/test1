@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
 
     // File System & Dialogs
     importTextFile: () => ipcRenderer.invoke('file:import-text'),
+    importJsonFile: () => ipcRenderer.invoke('file:import-json'),
     exportFile: (options) => ipcRenderer.invoke('file:export', options),
 
     // Network & QR
