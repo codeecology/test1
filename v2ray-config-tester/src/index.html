@@ -30,38 +30,6 @@
 
         <!-- Main content area -->
         <main class="main-content">
-            <!-- FEATURE: Main Dashboard (Idea #1) -->
-            <section class="dashboard" id="mainDashboard">
-                <div class="dashboard-stat">
-                    <div class="stat-icon"><i class="fa-solid fa-list-ol"></i></div>
-                    <div class="stat-info">
-                        <h4 data-lang="db_total_configs_title">تعداد کل کانفیگ‌ها</h4>
-                        <p id="dbTotalConfigs">-</p>
-                    </div>
-                </div>
-                <div class="dashboard-stat">
-                    <div class="stat-icon"><i class="fa-solid fa-heart-circle-check"></i></div>
-                    <div class="stat-info">
-                        <h4 data-lang="db_healthy_configs_title">کانفیگ‌های سالم</h4>
-                        <p id="dbHealthyConfigs">-</p>
-                    </div>
-                </div>
-                <div class="dashboard-stat">
-                    <div class="stat-icon"><i class="fa-solid fa-stopwatch-20"></i></div>
-                    <div class="stat-info">
-                        <h4 data-lang="db_last_test_time_title">آخرین تست</h4>
-                        <p id="dbLastTestTime">-</p>
-                    </div>
-                </div>
-                <div class="dashboard-stat">
-                    <div class="stat-icon"><i class="fa-solid fa-power-off"></i></div>
-                    <div class="stat-info">
-                        <h4 data-lang="db_connection_status_title">وضعیت اتصال</h4>
-                        <p id="dbConnectionStatus" data-lang="not_connected">متصل نیستید</p>
-                    </div>
-                </div>
-            </section>
-
             <!-- Top toolbar with actions and search -->
             <div class="toolbar">
                 <div class="actions-left">
@@ -103,15 +71,33 @@
                 <div class="status-left">
                     <button id="connectBtn" class="connect-btn disconnected" disabled><i class="fa-solid fa-power-off"></i> <span data-lang="connect">اتصال</span></button>
                     <span id="connectionStatus" data-lang="not_connected">متصل نیستید</span>
-                    <!-- FEATURE: Live ping chart placeholder -->
                     <div id="livePingContainer" class="live-ping-container">
                         <span id="livePingStatus"></span>
                     </div>
                 </div>
+
                 <div class="status-center">
-                     <progress id="progressBar" value="0" max="100"></progress>
-                     <span id="progressText">آماده</span>
+                    <!-- Moved stats here, will be styled with CSS for small display -->
+                    <div class="statusbar-stat">
+                        <i class="fa-solid fa-list-ol"></i>
+                        <span id="sbTotalConfigs">-</span>
+                    </div>
+                    <div class="statusbar-stat">
+                        <i class="fa-solid fa-heart-circle-check"></i>
+                        <span id="sbHealthyConfigs">-</span>
+                    </div>
+                    <div class="statusbar-stat">
+                        <i class="fa-solid fa-stopwatch-20"></i>
+                        <span id="sbLastTestTime">-</span>
+                    </div>
+                    <div class="statusbar-stat"> <!-- This one might be redundant if connectionStatus is already in status-left -->
+                        <i class="fa-solid fa-power-off"></i>
+                        <span id="sbConnectionStatus" data-lang="not_connected">متصل نیستید</span>
+                    </div>
+                    <progress id="progressBar" value="0" max="100"></progress>
+                    <span id="progressText">آماده</span>
                 </div>
+
                 <div class="status-right">
                     <button id="settingsBtn" class="icon-btn" title="تنظیمات"><i class="fa-solid fa-gear"></i></button>
                     <button id="themeToggleBtn" class="icon-btn" title="تغییر تم"><i class="fa-solid fa-moon"></i></button>
@@ -120,17 +106,7 @@
             </div>
         </main>
 
-        <!-- FEATURE: Config Details Panel (Idea #7) -->
-        <aside class="config-details-panel" id="configDetailsPanel">
-            <div class="panel-header">
-                <h3><i class="fa-solid fa-clipboard-list"></i> <span data-lang="config_details_title">جزئیات کانفیگ</span></h3>
-                <button id="closeDetailsPanelBtn" class="icon-btn" title="بستن پنل جزئیات">&times;</button>
-            </div>
-            <div class="panel-body" id="configDetailsBody">
-                <!-- Details will be populated here by renderer.js -->
-                <p class="empty-state" data-lang="select_config_to_view_details">یک کانفیگ را برای مشاهده جزئیات انتخاب کنید.</p>
-            </div>
-        </aside>
+        <!-- Config Details Panel REMOVED -->
     </div>
 
     <!-- Modals container -->

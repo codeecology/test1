@@ -226,61 +226,57 @@ html[dir="rtl"] .main-content.panel-open {
 }
 */
 
-/* --- Dashboard --- */
-.dashboard {
-    display: flex;
-    justify-content: space-between; /* Distribute items evenly */
-    align-items: center; /* Align items vertically */
-    padding: 0.6rem 1rem; /* Reduced padding */
-    background-color: var(--bg-secondary-color);
-    border-bottom: 1px solid var(--border-color);
-    gap: 0.8rem; /* Reduced gap */
-    flex-wrap: nowrap; /* Ensure single row */
-    overflow-x: auto; /* Allow horizontal scrolling if needed on very small screens */
-    min-height: 70px; /* Define a min-height */
+/* --- Dashboard (Now integrated into Status Bar) --- */
+.dashboard { display: none; } /* Hide the old dashboard section */
+
+/* Styles for stats integrated into status-bar */
+.status-bar .status-center {
+    flex-grow: 1;
+    justify-content: center;
+    gap: 1rem; /* Adjusted gap for items within status-center */
+    overflow-x: auto; /* Allow horizontal scroll if too many items */
+    padding: 0 0.5rem; /* Padding for scrollability */
 }
 
-.dashboard-stat {
-    background-color: transparent; /* Remove individual box background */
-    padding: 0.5rem 0.8rem; /* Reduced padding */
-    border-radius: 6px;
-    box-shadow: none; /* Remove individual box shadow */
+.statusbar-stat {
     display: flex;
     align-items: center;
-    gap: 0.6rem; /* Reduced gap */
-    flex-grow: 0; /* Do not allow them to grow disproportionately */
-    flex-shrink: 0; /* Prevent shrinking too much */
-    /* min-width: 180px; */ /* Remove min-width or set to a smaller flexible value if needed */
-    border-left: 3px solid var(--accent-color); /* Keep accent border, but maybe thinner */
-    height: 100%; /* Make stats take full height of dashboard */
-}
-.dashboard-stat:nth-child(2) { border-left-color: var(--success-color); }
-.dashboard-stat:nth-child(3) { border-left-color: var(--warning-color); }
-.dashboard-stat:nth-child(4) { border-left-color: var(--disconnected-color); }
-
-.dashboard-stat .stat-icon i {
-    font-size: 1.5em; /* Reduced icon size */
-    color: var(--accent-color);
-    opacity: 0.9;
-}
-.dashboard-stat:nth-child(2) .stat-icon i { color: var(--success-color); }
-.dashboard-stat:nth-child(3) .stat-icon i { color: var(--warning-color); }
-.dashboard-stat:nth-child(4) .stat-icon i { color: var(--disconnected-color); }
-
-
-.dashboard-stat .stat-info h4 {
-    font-size: 0.75em; /* Reduced font size */
+    gap: 0.4rem; /* Gap between icon and text in a stat */
     color: var(--text-secondary-color);
-    margin-bottom: 0.1rem; /* Reduced margin */
-    font-weight: 500;
-    white-space: nowrap; /* Prevent title wrapping */
+    font-size: 0.8em; /* Small font size for stats */
+    padding: 0.1rem 0.3rem; /* Minimal padding */
+    border-radius: 4px;
+    white-space: nowrap; /* Prevent text wrapping within a stat */
 }
 
-.dashboard-stat .stat-info p {
-    font-size: 1.1em; /* Reduced stat number size */
-    font-weight: 600; /* Slightly less bold */
+.statusbar-stat i {
+    font-size: 0.9em; /* Icon size relative to stat text */
+    opacity: 0.85;
+}
+.statusbar-stat span {
+    font-weight: 500;
     color: var(--text-color);
-    margin: 0;
+}
+
+/* Specific icon colors for statusbar-stats */
+/* These IDs are on the span, so target the sibling i */
+#sbTotalConfigs { /* No specific color needed, uses default */ }
+#sbHealthyConfigs { color: var(--success-color); }
+#sbHealthyConfigs i { color: var(--success-color); } /* If icon needs to match */
+
+#sbLastTestTime { /* No specific color needed, uses default */ }
+#sbConnectionStatus { /* Color handled by JS based on connection state */ }
+
+
+/* Ensure progress bar and text are also well-behaved */
+.status-center progress#progressBar {
+    width: 100px; /* Make progress bar smaller */
+    height: 6px;
+}
+.status-center span#progressText {
+    font-size: 0.8em; /* Match stat font size */
+    min-width: 50px; /* Give it some space */
+    text-align: left; /* Align text if it wraps */
 }
 
 

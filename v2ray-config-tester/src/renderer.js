@@ -19,8 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchTerm: '',
         currentLanguage: 'fa',
         currentTheme: 'dark-theme',
-        activeDetailConfigId: null, // For Config Details Panel
-        lastTestCompletionTime: null, // For Dashboard (Feature 1)
+        // activeDetailConfigId: null, // No longer needed for panel
+        lastTestCompletionTime: null,
     };
 
     // --- DOM Elements ---
@@ -326,24 +326,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderAll = () => {
         renderTable();
         renderGroups();
-        updateStatusBar(); // This updates the general status bar text
-        updateConnectionButton(); // This updates the connect/disconnect button and its text
+        updateStatusBar();
+        updateConnectionButton();
         updateTestUI();
         updateLangUI();
-        // Note: updateDashboard() is called separately when specific data changes
+        updateDashboardStatsInStatusBar(); // Call the new function
     };
 
-    const updateDashboard = () => {
-        const dbTotalConfigs = $('#dbTotalConfigs');
-        const dbHealthyConfigs = $('#dbHealthyConfigs');
-        const dbLastTestTime = $('#dbLastTestTime');
-        const dbConnectionStatus = $('#dbConnectionStatus');
+    // Renamed updateDashboard to updateDashboardStatsInStatusBar and using new IDs
+    const updateDashboardStatsInStatusBar = () => {
+        const sbTotalConfigs = $('#sbTotalConfigs');
+        const sbHealthyConfigs = $('#sbHealthyConfigs');
+        const sbLastTestTime = $('#sbLastTestTime');
+        const sbConnectionStatus = $('#sbConnectionStatus'); // For the stat in status-center
 
-        if (dbTotalConfigs) dbTotalConfigs.textContent = state.configs.length;
+        if (sbTotalConfigs) sbTotalConfigs.textContent = state.configs.length;
+        else console.warn("#sbTotalConfigs not found");
 
-        if (dbHealthyConfigs) dbHealthyConfigs.textContent = state.configs.filter(c => c.status === 'healthy').length;
+        if (sbHealthyConfigs) sbHealthyConfigs.textContent = state.configs.filter(c => c.status === 'healthy').length;
+        else console.warn("#sbHealthyConfigs not found");
 
-        if (dbLastTestTime) {
+        if (sbLastTestTime) {
             if (state.lastTestCompletionTime) {
                 const now = new Date();
                 const lastTest = new Date(state.lastTestCompletionTime);
@@ -364,29 +367,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     dbLastTestTime.textContent = lastTest.toLocaleDateString();
                 }
             } else {
-                dbLastTestTime.textContent = lang('never');
+                sbLastTestTime.textContent = lang('never');
             }
-        }
+        } else console.warn("#sbLastTestTime not found");
 
-        if (dbConnectionStatus) {
+        // Update the connection status in the status-center (sbConnectionStatus)
+        // The one in status-left (connectionStatus) is updated by updateConnectionButton
+        if (sbConnectionStatus) {
             if (state.activeConnectionId) {
                 const config = state.configs.find(c => c.id === state.activeConnectionId);
-                dbConnectionStatus.textContent = `${lang('connected_to')} ${config?.name || 'Unknown'}`;
-                // Change icon color on dashboard stat for connection
-                const iconEl = dbConnectionStatus.closest('.dashboard-stat')?.querySelector('.stat-icon i');
-                const statBox = dbConnectionStatus.closest('.dashboard-stat');
+                sbConnectionStatus.textContent = `${lang('connected_to')} ${config?.name || 'Unknown'}`;
+                const iconEl = sbConnectionStatus.parentElement.querySelector('i');
                 if(iconEl) iconEl.style.color = 'var(--success-color)';
-                if(statBox) statBox.style.borderColor = 'var(--success-color)';
-
-
             } else {
-                dbConnectionStatus.textContent = lang('not_connected');
-                const iconEl = dbConnectionStatus.closest('.dashboard-stat')?.querySelector('.stat-icon i');
-                const statBox = dbConnectionStatus.closest('.dashboard-stat');
+                sbConnectionStatus.textContent = lang('not_connected');
+                 const iconEl = sbConnectionStatus.parentElement.querySelector('i');
                 if(iconEl) iconEl.style.color = 'var(--disconnected-color)';
-                if(statBox) statBox.style.borderColor = 'var(--disconnected-color)';
             }
-        }
+        } else console.warn("#sbConnectionStatus not found");
     };
 
 
@@ -684,90 +682,108 @@ document.addEventListener('DOMContentLoaded', () => {
     const processAndAddConfigs = async (linksArray) => {
         const existingLinks = new Set(state.configs.map(c => c.link));
         let addedCount = 0;
+        let failedCount = 0;
+
         for (const link of linksArray) {
-            if (!link || !/^(vless|vmess|trojan|ss):\/\//.test(link) || existingLinks.has(link)) continue;
+            if (!link || !/^(vless|vmess|trojan|ss):\/\//.test(link) || existingLinks.has(link)) {
+                if (existingLinks.has(link) && isDev) { // Only log duplicates in dev mode
+                    console.warn(`Skipping duplicate config link: ${link}`);
+                }
+                continue;
+            }
+
             try {
-                const url = new URL(link);
-                let name = decodeURIComponent(url.hash.substring(1)) || `${url.hostname}:${url.port}`; // Default name
-                let displayPort = url.port || '-'; // Default port
+                const detailsResult = await window.api.getFullConfigDetails(link);
 
-                // Attempt to get port for VMess for display purposes
-                if (link.startsWith('vmess://')) {
-                    try {
-                        const b64decoded = Buffer.from(link.substring(8), 'base64').toString('utf-8');
-                        const vmessJson = JSON.parse(b64decoded);
-                        if (vmessJson.port) {
-                            displayPort = vmessJson.port.toString();
-                        }
-                        // Update name if not set by fragment and address/port are available
-                        if (!url.hash.substring(1) && vmessJson.add && vmessJson.port) {
-                            name = `${vmessJson.add}:${vmessJson.port}`;
-                        }
-                    } catch (e) {
-                        console.warn(`Could not parse VMess JSON for display details (link: ${link}):`, e.message);
-                        // displayPort remains url.port or '-'
-                        // name remains default
-                    }
+                if (!detailsResult || !detailsResult.success) {
+                    console.warn(`Renderer: Failed to get full details for link (skipping): ${link} - Error: ${detailsResult?.error || 'Unknown parse error from main'}`);
+                    failedCount++;
+                    continue;
                 }
 
+                const fullDetails = detailsResult.details;
+                // Use original link's URL object primarily for the #ps (name fragment)
+                const parsedUrlForNameFragment = new URL(link);
+                let name = decodeURIComponent(parsedUrlForNameFragment.hash.substring(1));
 
-                let country = 'XX'; // Default country code
+                let address = '';
+                let displayPort = '-';
+
+                // Extract address and port from the rich fullDetails object
+                if (fullDetails.protocol === 'vmess' || fullDetails.protocol === 'vless') {
+                    address = fullDetails.settings?.vnext?.[0]?.address;
+                    displayPort = fullDetails.settings?.vnext?.[0]?.port?.toString() || '-';
+                } else if (fullDetails.protocol === 'trojan' || fullDetails.protocol === 'ss') {
+                    address = fullDetails.settings?.servers?.[0]?.address;
+                    displayPort = fullDetails.settings?.servers?.[0]?.port?.toString() || '-';
+                }
+
+                // Fallback for address if somehow not in fullDetails (shouldn't happen with good main.js parsing)
+                address = address || parsedUrlForNameFragment.hostname;
+
+                if (!name) { // If #ps is not present or empty, construct a name
+                    name = address && displayPort !== '-' ? `${address}:${displayPort}` : (parsedUrlForNameFragment.hostname || `Config ${state.configs.length + 1 + addedCount}`);
+                }
+
+                let country = 'XX';
                 try {
-                    country = await window.api.getCountry(url.hostname || (link.startsWith('vmess://') ? name.split(':')[0] : '')); // Fallback to parsed address for vmess if url.hostname is empty
+                    const hostForCountryLookup = address; // Prefer address from parsed details
+                    if (hostForCountryLookup) {
+                        if(isDev) console.log(`[processAndAddConfigs] Getting country for host: ${hostForCountryLookup}`);
+                        country = await window.api.getCountry(hostForCountryLookup);
+                        if(isDev) console.log(`[processAndAddConfigs] Got country: ${country} for host: ${hostForCountryLookup}`);
+                    } else {
+                        if(isDev) console.warn(`[processAndAddConfigs] No valid hostname/address for country lookup from parsed details: ${link}`);
+                    }
                 } catch (countryError) {
-                    console.warn(`Failed to get country for ${url.hostname}:`, countryError.message);
-                    // Use default 'XX' and proceed
+                    console.warn(`[processAndAddConfigs] Failed to get country for ${address || parsedUrlForNameFragment.hostname}:`, countryError.message);
                 }
 
-                // Extract details for the new "Details" column
-                const protocolName = url.protocol.slice(0, -1).toLowerCase();
-                const searchParams = url.searchParams;
+                // Extract other details primarily from fullDetails, fallback to URL parsing if necessary
+                const protocolName = fullDetails.protocol || parsedUrlForNameFragment.protocol.slice(0, -1).toLowerCase();
 
-                const configDetails = {
-                    port: url.port,
-                    networkType: searchParams.get('type') || (protocolName === 'vmess' ? 'tcp' : 'tcp'), // vmess might have 'net' in JSON
-                    security: searchParams.get('security') || 'none',
-                    sni: searchParams.get('sni') || searchParams.get('host') || '',
-                    fp: searchParams.get('fp') || '',
-                    path: searchParams.get('path') || '',
-                    serviceName: searchParams.get('serviceName') || '',
-                    encryption: searchParams.get('encryption') || '', // VLESS
-                    flow: searchParams.get('flow') || '',             // VLESS
-                    // Note: For VMess, many details (like 'net', 'tls', 'sni', 'path') are in the base64 part.
-                    // For SS, method is part of the userinfo.
-                    // This simple extraction here is a baseline. True detailed parsing still relies on main.js::parseConfigLink.
-                    // We are adding what's easily available from URL for display purposes.
-                };
-                 if (protocolName === 'vmess') { // VMess often has details in fragment or needs base64 decode
-                    // A proper solution would be an IPC call to main process's parseConfigLink to get full details.
-                    // For now, we'll rely on what's in searchParams or make educated guesses.
-                    configDetails.networkType = searchParams.get('type') || searchParams.get('net') || 'tcp';
-                    if (searchParams.get('tls') === 'tls') configDetails.security = 'tls';
+                let networkType = fullDetails.streamSettings?.network;
+                if (!networkType && protocolName === 'vmess') networkType = 'tcp'; // Default for vmess if not specified
+                networkType = networkType || parsedUrlForNameFragment.searchParams.get('type') || 'tcp';
+
+                let security = fullDetails.streamSettings?.security;
+                if (!security && fullDetails.streamSettings?.tlsSettings) security = 'tls'; // Infer if tlsSettings exist
+                else if (!security && fullDetails.streamSettings?.realitySettings) security = 'reality'; // Infer if realitySettings exist
+                security = security || parsedUrlForNameFragment.searchParams.get('security') || 'none';
+
+                const sni = fullDetails.streamSettings?.tlsSettings?.serverName || fullDetails.streamSettings?.realitySettings?.serverName || parsedUrlForNameFragment.searchParams.get('sni') || parsedUrlForNameFragment.searchParams.get('host') || '';
+                const fp = fullDetails.streamSettings?.tlsSettings?.fingerprint || fullDetails.streamSettings?.realitySettings?.fingerprint || parsedUrlForNameFragment.searchParams.get('fp') || '';
+
+                let extractedPath = '';
+                if (fullDetails.streamSettings?.wsSettings?.path) {
+                    extractedPath = fullDetails.streamSettings.wsSettings.path;
+                } else if (fullDetails.streamSettings?.grpcSettings?.serviceName) {
+                    extractedPath = fullDetails.streamSettings.grpcSettings.serviceName;
                 }
+                extractedPath = extractedPath || parsedUrlForNameFragment.searchParams.get('path') || '';
+                extractedPath = extractedPath.split(',')[0];
 
+                const serviceName = fullDetails.streamSettings?.grpcSettings?.serviceName || parsedUrlForNameFragment.searchParams.get('serviceName') || '';
+                const encryption = (protocolName === 'vless' && fullDetails.settings?.vnext?.[0]?.users?.[0]?.encryption) || parsedUrlForNameFragment.searchParams.get('encryption') || '';
+                const flow = (protocolName === 'vless' && fullDetails.settings?.vnext?.[0]?.users?.[0]?.flow) || parsedUrlForNameFragment.searchParams.get('flow') || '';
 
                 state.configs.push({
                     id: `cfg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     link, name, country,
-                    address: url.hostname, // This might be empty for VMess if not parsed from JSON yet for display
+                    address: address,
                     protocol: protocolName,
-                    // 'network' is used for the table column, 'networkType' for details to avoid conflict
-                    network: configDetails.networkType, // Keep existing 'network' field for direct display
-                    portToDisplay: displayPort, // Use the potentially VMess-parsed port
+                    network: networkType,
+                    portToDisplay: displayPort,
                     status: 'untested', delay: null,
-                    // Fix: Assign to active group if not 'all', otherwise null
                     groupId: state.activeGroupId && state.activeGroupId !== 'all' ? state.activeGroupId : null,
-                    // Store extracted details (these are used by formatDetails)
-                    // 'port' in configDetails is still from url.port, which is fine for its purpose
-                    port: configDetails.port,
-                    security: configDetails.security,
-                    sni: configDetails.sni,
-                    fp: configDetails.fp,
-                    path: configDetails.path,
-                    serviceName: configDetails.serviceName,
-                    encryption: configDetails.encryption, // VLESS specific
-                    flow: configDetails.flow,             // VLESS specific
-                    // method: extractedMethodForSS, // SS specific, harder to get from URL without full parsing
+                    // Store key details for display and potential filtering
+                    security: security,
+                    sni: sni,
+                    fp: fp,
+                    path: extractedPath,
+                    serviceName: serviceName,
+                    encryption: encryption,
+                    flow: flow,
                 });
                 existingLinks.add(link);
                 addedCount++;
@@ -1109,153 +1125,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // --- Config Details Panel Logic (Feature 7) ---
-    const showDetailsPanel = async (configId) => {
-        const config = state.configs.find(c => c.id === configId);
-        if (!config) {
-            showToast(lang('error_config_not_found') || 'Config not found.', 'error');
-            return;
-        }
-
-        // If panel is already open for this config, optionally toggle or do nothing. For now, just re-fetch and show.
-        // if ($('#configDetailsPanel').classList.contains('open') && state.activeDetailConfigId === configId) {
-        //     closeDetailsPanel();
-        //     return;
-        // }
-
-        showToast(lang('loading_details') || 'Loading details...', 'info'); // Add translation
-        try {
-            const result = await window.api.getFullConfigDetails(config.link);
-            if (result.success) {
-                populateDetailsPanel(result.details, config); // Pass original config for name, link etc.
-                $('#configDetailsPanel').classList.add('open');
-                state.activeDetailConfigId = configId;
-            } else {
-                throw new Error(result.error || 'Failed to get config details.');
-            }
-        } catch (error) {
-            console.error("Error fetching full config details:", error);
-            showToast(`${lang('error_fetching_details') || 'Error fetching details'}: ${error.message}`, 'error'); // Add translation
-            closeDetailsPanel(); // Close if it was trying to open, or clear if already open
-        }
-    };
-
-    const closeDetailsPanel = () => {
-        $('#configDetailsPanel').classList.remove('open');
-        state.activeDetailConfigId = null;
-        // Optionally, clear content after animation or revert to placeholder
-        setTimeout(() => {
-            if (!$('#configDetailsPanel').classList.contains('open')) { // Check if still closed
-                const panelBody = $('#configDetailsBody');
-                panelBody.innerHTML = `<p class="empty-state" data-lang="select_config_to_view_details">${lang('select_config_to_view_details')}</p>`;
-            }
-        }, 300); // Match CSS transition duration
-    };
-
-    const populateDetailsPanel = (details, originalConfig) => {
-        const panelBody = $('#configDetailsBody');
-        panelBody.innerHTML = ''; // Clear previous content or placeholder
-
-        const addDetail = (labelKey, value, isLong = false) => {
-            if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
-                return; // Don't display empty fields
-            }
-            const item = document.createElement('div');
-            item.className = 'detail-item';
-
-            const label = document.createElement('div');
-            label.className = 'detail-label';
-            label.textContent = lang(labelKey) || labelKey.replace(/_/g, ' ');
-
-            const valueDiv = document.createElement('div');
-            valueDiv.className = 'detail-value';
-            if (typeof value === 'boolean') {
-                valueDiv.textContent = value ? lang('yes') : lang('no');
-            } else if (Array.isArray(value)) {
-                valueDiv.textContent = value.join(', ');
-            } else {
-                valueDiv.textContent = value;
-            }
-
-            if (isLong) valueDiv.classList.add('long');
-
-            item.appendChild(label);
-            item.appendChild(valueDiv);
-            panelBody.appendChild(item);
-        };
-
-        // Basic Info from originalConfig (already in renderer)
-        addDetail('detail_name', originalConfig.name);
-        addDetail('detail_protocol', details.protocol); // From full details
-        addDetail('detail_address', originalConfig.address);
-        addDetail('detail_port', originalConfig.portToDisplay);
-
-        // Protocol Specific Settings (from details.settings)
-        if (details.settings) {
-            if (details.protocol === 'vless' && details.settings.vnext && details.settings.vnext[0]) {
-                const vnext = details.settings.vnext[0];
-                if (vnext.users && vnext.users[0]) {
-                    addDetail('detail_id_user', vnext.users[0].id);
-                    addDetail('detail_encryption', vnext.users[0].encryption);
-                    addDetail('detail_flow', vnext.users[0].flow);
-                }
-            } else if (details.protocol === 'vmess' && details.settings.vnext && details.settings.vnext[0]) {
-                const vnext = details.settings.vnext[0];
-                if (vnext.users && vnext.users[0]) {
-                    addDetail('detail_id_user', vnext.users[0].id);
-                    addDetail('detail_alter_id', vnext.users[0].alterId); // Add lang key
-                    addDetail('detail_security_vmess', vnext.users[0].security); // Add lang key e.g. "Cipher (VMess)"
-                }
-            } else if (details.protocol === 'trojan' && details.settings.servers && details.settings.servers[0]) {
-                addDetail('detail_password', details.settings.servers[0].password);
-            } else if (details.protocol === 'ss' && details.settings.servers && details.settings.servers[0]) {
-                addDetail('detail_ss_method', details.settings.servers[0].method);
-                addDetail('detail_password', details.settings.servers[0].password);
-            }
-        }
-
-        // Stream Settings (from details.streamSettings)
-        if (details.streamSettings) {
-            addDetail('detail_network', details.streamSettings.network);
-            addDetail('detail_security', details.streamSettings.security);
-
-            if (details.streamSettings.security === 'tls' || details.streamSettings.security === 'xtls') {
-                const tlsSettings = details.streamSettings.tlsSettings || {};
-                addDetail('detail_sni', tlsSettings.serverName);
-                addDetail('detail_alpn', tlsSettings.alpn); // Will be displayed as comma-separated string if array
-                addDetail('detail_fingerprint', tlsSettings.fingerprint);
-                addDetail('detail_allow_insecure', typeof tlsSettings.allowInsecure === 'boolean' ? tlsSettings.allowInsecure : undefined);
-                // TODO: Add publicKey, shortId if present
-            }
-             if (details.streamSettings.security === 'xtls') { // XTLS specific on top of TLS
-                const realitySettings = details.streamSettings.realitySettings || {}; // If XTLS uses REALITY
-                addDetail('detail_xtls_settings_shortid', realitySettings.shortId); // Add lang key
-                addDetail('detail_xtls_settings_publickey', realitySettings.publicKey); // Add lang key
-             }
-
-
-            if (details.streamSettings.network === 'ws' && details.streamSettings.wsSettings) {
-                addDetail('detail_ws_path', details.streamSettings.wsSettings.path);
-                if (details.streamSettings.wsSettings.headers) {
-                    addDetail('detail_ws_host', details.streamSettings.wsSettings.headers.Host);
-                }
-            } else if (details.streamSettings.network === 'grpc' && details.streamSettings.grpcSettings) {
-                addDetail('detail_service_name', details.streamSettings.grpcSettings.serviceName);
-                addDetail('detail_multi_mode', typeof details.streamSettings.grpcSettings.multiMode === 'boolean' ? details.streamSettings.grpcSettings.multiMode : undefined);
-            } else if (details.streamSettings.network === 'kcp' && details.streamSettings.kcpSettings) {
-                addDetail('detail_header_type', details.streamSettings.kcpSettings.header?.type);
-                addDetail('detail_seed', details.streamSettings.kcpSettings.seed);
-                // Could add MTU, TTI etc. if desired
-            } else if (details.streamSettings.network === 'quic' && details.streamSettings.quicSettings) {
-                addDetail('detail_quic_security', details.streamSettings.quicSettings.security);
-                addDetail('detail_quic_key', details.streamSettings.quicSettings.key);
-                addDetail('detail_header_type', details.streamSettings.quicSettings.header?.type);
-            }
-            // TODO: Add other network types like tcp (http obfuscation), httpupgrade etc.
-        }
-        addDetail('detail_full_link', originalConfig.link, true);
-    };
-
+    // --- Config Details Panel Logic (REMOVED) ---
+    // const showDetailsPanel = ... (Removed)
+    // const closeDetailsPanel = ... (Removed)
+    // const populateDetailsPanel = ... (Removed)
 
     // --- Event Listeners ---
     function addEventListeners() {
@@ -1281,9 +1154,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // Config Details Panel
-        safelyAddEventListener('#closeDetailsPanelBtn', 'click', closeDetailsPanel);
-
+        // Config Details Panel related event listener REMOVED
+        // safelyAddEventListener('#closeDetailsPanelBtn', 'click', closeDetailsPanel);
 
         // Toolbar buttons
         safelyAddEventListener('#openAddModalBtn', 'click', () => openModal('addConfigModal'));
@@ -1524,11 +1396,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Modify renderTable and other functions that change selection/visibility to call updateSelectAllCheckboxState
     // For example, at the end of renderTable:
     // Original renderTable() ends here...
-    updateSelectAllCheckboxState(); // Call this after table is rendered
+    updateSelectAllCheckboxState();
     // Also call it after handleSearch, handleGroupClick, handleDeleteConfig, etc.
 
-    const handleAddConfigFromText = () => { // Now correctly associated with addFromPasteBtn
-        const text = $('#pasteArea').value; // Corrected ID: pasteArea
+    // Removed: showDetailsPanel, closeDetailsPanel, populateDetailsPanel as the panel is removed.
+    // Details will be integrated into the context menu.
+
+    const handleAddConfigFromText = () => {
+        const text = $('#pasteArea').value;
         if (text) {
             const links = text.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
             processAndAddConfigs(links);
@@ -1732,26 +1607,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Logic for showing details panel (only on simple row click, not checkbox/multi-select)
-        // It should open if the click was not on a checkbox, and not a multi-select action
-        // unless the panel is already open for that ID.
-        if (!isCheckboxClick && !isSpecialKey) {
-            if (state.activeDetailConfigId === configId && $('#configDetailsPanel').classList.contains('open')) {
-                // If already open for this config, a simple click might close it (optional behavior)
-                // For now, let's assume a simple click on an already detailed config does nothing to the panel
-                // or re-affirms it. Or, if we want toggle: closeDetailsPanel();
-            } else {
-                showDetailsPanel(configId);
-            }
-        } else if (isCheckboxClick && state.selectedConfigIds.includes(configId) && state.selectedConfigIds.length === 1) {
-            // If a checkbox is clicked and it's the only selected item, also show its details.
-            showDetailsPanel(configId);
-        } else if (state.selectedConfigIds.length !== 1 && $('#configDetailsPanel').classList.contains('open')) {
-            // If multiple items are now selected, or no items, close the details panel.
-            closeDetailsPanel();
-        }
+        // This is now REMOVED as details are in context menu.
+        // if (!isCheckboxClick && !isSpecialKey) {
+        //     if (state.activeDetailConfigId === configId && $('#configDetailsPanel').classList.contains('open')) {
+        //         // If already open for this config, a simple click might close it (optional behavior)
+        //         // For now, let's assume a simple click on an already detailed config does nothing to the panel
+        //         // or re-affirms it. Or, if we want toggle: closeDetailsPanel();
+        //     } else {
+        //         showDetailsPanel(configId);
+        //     }
+        // } else if (isCheckboxClick && state.selectedConfigIds.includes(configId) && state.selectedConfigIds.length === 1) {
+        //     // If a checkbox is clicked and it's the only selected item, also show its details.
+        //     showDetailsPanel(configId);
+        // } else if (state.selectedConfigIds.length !== 1 && $('#configDetailsPanel').classList.contains('open')) {
+        //     // If multiple items are now selected, or no items, close the details panel.
+        //     closeDetailsPanel();
+        // }
     };
 
-    const handleTableContextMenu = (e) => {
+    const handleTableContextMenu = async (e) => { // Made async to fetch details
         e.preventDefault();
         const row = e.target.closest('tr');
         if (!row || !row.dataset.id) { // Context menu on empty table area or header
@@ -1767,7 +1641,48 @@ document.addEventListener('DOMContentLoaded', () => {
             renderTable(); // Update selection visuals
             updateConnectionButton();
         }
-        showContextMenu(e, getConfigContextMenuItems());
+
+        let menuItems = [];
+        if (row && row.dataset.id && state.selectedConfigIds.length === 1) {
+            // If a single config is right-clicked (and now selected), fetch its details for the context menu
+            const config = state.configs.find(c => c.id === clickedConfigId);
+            if (config) {
+                try {
+                    // Add a "Loading details..." item first
+                    // This item will be replaced once details are fetched.
+                    // This approach is complex for a context menu that's usually built synchronously.
+                    // A simpler way is to build the menu after details are fetched.
+                    // Or, show basic items and a "View Details" that then opens a modal or separate view.
+                    // Given the request to put details *in* the menu, we'll fetch then build.
+
+                    // showContextMenu(e, [{label: "Loading details...", disabled: true}]); // Show temp menu
+                    // const menuElement = $('#contextMenu'); // Get reference to update later
+                    // if(menuElement) menuElement.classList.add('loading-details');
+
+
+                    const result = await window.api.getFullConfigDetails(config.link);
+                    // menuElement.classList.remove('loading-details'); // Remove loading state
+
+                    if (result.success) {
+                        menuItems = getConfigContextMenuItems(result.details, config);
+                    } else {
+                        console.error("Failed to get full config details for context menu:", result.error);
+                        showToast(lang('error_fetching_details') + `: ${result.error}`, 'error');
+                        menuItems = getConfigContextMenuItems(null, config); // Build menu without details
+                    }
+                } catch (error) {
+                    // menuElement.classList.remove('loading-details');
+                    console.error("Exception getting full config details for context menu:", error);
+                    showToast(lang('error_fetching_details') + `: ${error.message}`, 'error');
+                    menuItems = getConfigContextMenuItems(null, config); // Build menu without details
+                }
+            } else {
+                 menuItems = getConfigContextMenuItems(); // Should not happen if row.dataset.id is valid
+            }
+        } else {
+            menuItems = getConfigContextMenuItems(); // For multi-select or global context
+        }
+        showContextMenu(e, menuItems);
     };
 
     const handleSearch = (e) => {
@@ -2017,14 +1932,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
     };
 
-    const getConfigContextMenuItems = () => {
+    const getConfigContextMenuItems = (configDetails = null, originalConfig = null) => {
         const items = [];
+
+        if (originalConfig && configDetails) {
+            items.push({ label: `${lang('detail_name')}: ${originalConfig.name}`, disabled: true, iconClass: 'fa-solid fa-tag' });
+            items.push({ label: `${lang('detail_protocol')}: ${configDetails.protocol}`, disabled: true, iconClass: 'fa-solid fa-shield-halved' });
+            items.push({ label: `${lang('detail_address')}: ${originalConfig.address}`, disabled: true, iconClass: 'fa-solid fa-server' });
+            items.push({ label: `${lang('detail_port')}: ${originalConfig.portToDisplay}`, disabled: true, iconClass: 'fa-solid fa-ethernet' });
+
+            // Add more details as needed, these are just examples
+            if (configDetails.streamSettings) {
+                items.push({ label: `${lang('detail_network')}: ${configDetails.streamSettings.network}`, disabled: true, iconClass: 'fa-solid fa-wifi' });
+                items.push({ label: `${lang('detail_security')}: ${configDetails.streamSettings.security}`, disabled: true, iconClass: 'fa-solid fa-lock' });
+                if (configDetails.streamSettings.tlsSettings && configDetails.streamSettings.tlsSettings.serverName) {
+                    items.push({ label: `${lang('detail_sni')}: ${configDetails.streamSettings.tlsSettings.serverName}`, disabled: true, iconClass: 'fa-solid fa-shield-alt' });
+                }
+                 if (configDetails.streamSettings.wsSettings && configDetails.streamSettings.wsSettings.path) {
+                    items.push({ label: `${lang('detail_ws_path')}: ${configDetails.streamSettings.wsSettings.path}`, disabled: true, iconClass: 'fa-solid fa-route' });
+                }
+            }
+            items.push({ type: 'separator' });
+        }
+
+
         if (state.selectedConfigIds.length === 1) {
-            const selectedConfig = state.configs.find(c => c.id === state.selectedConfigIds[0]);
-            if(selectedConfig) {
-                 items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(selectedConfig.link).then(() => showToast(lang('toast_link_copied'), 'success')).catch(e => showToast(lang('toast_failed_copy_link'), 'error')) });
-                 items.push({ label: lang('show_qr_code'), action: () => handleShowQRCode(selectedConfig.link) });
-                 items.push({ label: lang('edit_name'), action: () => handleEditName(selectedConfig) });
+            // Actionable items are relevant even if details couldn't be loaded, use originalConfig if available
+            const configToActOn = originalConfig || state.configs.find(c => c.id === state.selectedConfigIds[0]);
+            if(configToActOn) {
+                 items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(configToActOn.link).then(() => showToast(lang('toast_link_copied'), 'success')).catch(e => showToast(lang('toast_failed_copy_link'), 'error')), iconClass: 'fa-solid fa-copy' });
+                 items.push({ label: lang('show_qr_code'), action: () => handleShowQRCode(configToActOn.link), iconClass: 'fa-solid fa-qrcode' });
+                 items.push({ label: lang('edit_name'), action: () => handleEditName(configToActOn), iconClass: 'fa-solid fa-pen-to-square' });
             }
         }
 
