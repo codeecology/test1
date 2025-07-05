@@ -15,48 +15,75 @@
 
 /* Dark Theme (Default) */
 body.dark-theme {
-    --bg-color: #1e1e1e;
-    --bg-secondary-color: #252526;
-    --bg-tertiary-color: #333333;
-    --text-color: #e0e0e0;
-    --text-secondary-color: #a0a0a0;
-    --border-color: #444444;
-    --accent-color: #0095ff;
-    --accent-hover-color: #33abff;
-    --success-color: #4caf50;
-    --error-color: #f44336;
-    --warning-color: #ffc107;
-    --disconnected-color: #6c757d;
-    --shadow-color: rgba(0, 0, 0, 0.4);
+    --bg-color: #23272a; /* Slightly desaturated blue/gray */
+    --bg-secondary-color: #2c3136; /* Slightly lighter for cards/modals */
+    --bg-tertiary-color: #363c42; /* For hover states, input backgrounds */
+    --text-color: #f0f0f0; /* Brighter white for better contrast */
+    --text-secondary-color: #b0b0b0; /* Lighter secondary text */
+    --border-color: #4a5058; /* Softer border color */
+    --accent-color: #00aeff; /* A slightly brighter blue */
+    --accent-hover-color: #0095dd; /* Darker shade for hover */
+    --success-color: #5cb85c; /* Standard green */
+    --error-color: #d9534f; /* Standard red */
+    --warning-color: #f0ad4e; /* Standard yellow */
+    --disconnected-color: #777;
+    --shadow-color: rgba(0, 0, 0, 0.5); /* Slightly darker shadow for depth */
+    --scrollbar-thumb-color: #555;
+    --scrollbar-track-color: var(--bg-tertiary-color);
 }
 
 /* Light Theme */
 body.light-theme {
-    --bg-color: #f4f6f9;
-    --bg-secondary-color: #ffffff;
-    --bg-tertiary-color: #e9ecef;
-    --text-color: #212529;
-    --text-secondary-color: #6c757d;
-    --border-color: #dee2e6;
-    --accent-color: #007bff;
-    --accent-hover-color: #0056b3;
+    --bg-color: #f8f9fa; /* Soft off-white */
+    --bg-secondary-color: #ffffff; /* Pure white for cards/modals */
+    --bg-tertiary-color: #eef1f4; /* For hover states, input backgrounds */
+    --text-color: #212529; /* Dark gray for text */
+    --text-secondary-color: #5a6268; /* Slightly darker secondary text for readability */
+    --border-color: #ced4da; /* Standard light border */
+    --accent-color: #007bff; /* Standard blue */
+    --accent-hover-color: #0056b3; /* Darker blue for hover */
     --success-color: #28a745;
     --error-color: #dc3545;
     --warning-color: #ffc107;
     --disconnected-color: #6c757d;
-    --shadow-color: rgba(0, 0, 0, 0.1);
+    --shadow-color: rgba(0, 0, 0, 0.15); /* Softer shadow */
+    --scrollbar-thumb-color: #adb5bd;
+    --scrollbar-track-color: var(--bg-tertiary-color);
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    scrollbar-width: thin; /* For Firefox */
+    scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color); /* For Firefox */
 }
+
+/* For Webkit browsers like Chrome, Safari */
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+*::-webkit-scrollbar-track {
+    background: var(--scrollbar-track-color);
+    border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-color);
+    border-radius: 4px;
+    border: 2px solid var(--scrollbar-track-color); /* Creates padding around thumb */
+}
+*::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--scrollbar-thumb-color) 70%, #000);
+}
+
 
 body {
     font-family: var(--font-family);
     background-color: var(--bg-color);
     color: var(--text-color);
+    font-size: 15px; /* Slightly increase base font size for readability */
+    line-height: 1.6; /* Improve line spacing */
     overflow: hidden;
     user-select: none;
     transition: background-color var(--transition-fast), color var(--transition-fast);
@@ -70,186 +97,534 @@ body {
 /* --- General Components --- */
 button {
     font-family: var(--font-family);
-    padding: 8px 15px;
+    padding: 10px 18px; /* Slightly larger padding */
     border: 1px solid var(--border-color);
     background-color: var(--bg-tertiary-color);
     color: var(--text-color);
     cursor: pointer;
-    border-radius: 6px;
-    transition: var(--transition-fast);
+    border-radius: 8px; /* Slightly more rounded */
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     white-space: nowrap;
+    font-weight: 500; /* Medium weight for button text */
 }
 
 button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 5px var(--shadow-color);
+    transform: translateY(-2px); /* More pronounced lift */
+    box-shadow: 0 4px 8px var(--shadow-color); /* Softer, more diffused shadow */
     border-color: var(--accent-color);
+    background-color: color-mix(in srgb, var(--bg-tertiary-color) 90%, var(--accent-color)); /* Slight accent tint on hover */
+}
+
+button:active:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px var(--shadow-color);
 }
 
 button:disabled {
-    opacity: 0.5;
+    opacity: 0.6; /* Slightly more visible when disabled */
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+    background-color: var(--bg-tertiary-color); /* Ensure disabled has a clear background */
 }
 
-.primary-btn { background-color: var(--accent-color); color: white; border-color: var(--accent-color); }
-.primary-btn:hover:not(:disabled) { background-color: var(--accent-hover-color); }
-.danger-btn { background-color: var(--error-color); color: white; border-color: var(--error-color); }
-.secondary-btn { background-color: var(--bg-tertiary-color); }
-.icon-btn { background: none; border: none; font-size: 1.2rem; padding: 0.25rem 0.5rem; }
-.icon-btn:hover { color: var(--accent-color); }
+.primary-btn { background-color: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+.primary-btn:hover:not(:disabled) { background-color: var(--accent-hover-color); border-color: var(--accent-hover-color); }
+.danger-btn { background-color: var(--error-color); color: #fff; border-color: var(--error-color); }
+.danger-btn:hover:not(:disabled) { background-color: color-mix(in srgb, var(--error-color) 85%, #000); border-color: color-mix(in srgb, var(--error-color) 85%, #000); }
+.secondary-btn { background-color: var(--bg-tertiary-color); border-color: var(--border-color); }
+.secondary-btn:hover:not(:disabled) { border-color: var(--text-secondary-color); }
+
+.icon-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.3rem; /* Slightly larger icons */
+    padding: 0.4rem 0.6rem;
+    color: var(--text-secondary-color);
+    border-radius: 50%; /* Circular background for hover */
+}
+.icon-btn:hover:not(:disabled) {
+    color: var(--accent-color);
+    background-color: color-mix(in srgb, var(--accent-color) 15%, transparent); /* Subtle background on hover */
+    box-shadow: none;
+    transform: none;
+}
 
 input[type="text"], input[type="number"], textarea {
     width: 100%;
-    padding: 10px;
-    background-color: var(--bg-color);
+    padding: 12px 15px; /* More padding */
+    background-color: var(--bg-tertiary-color); /* Consistent with buttons */
     border: 1px solid var(--border-color);
-    border-radius: 5px;
+    border-radius: 8px; /* Consistent with buttons */
     color: var(--text-color);
     font-family: var(--font-family);
-    transition: var(--transition-fast);
+    font-size: 0.95rem;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 input[type="text"]:focus, input[type="number"]:focus, textarea:focus {
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 30%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 25%, transparent); /* Softer, larger focus ring */
     outline: none;
+    background-color: var(--bg-secondary-color); /* Slightly different background on focus */
+}
+
+textarea {
+    resize: vertical; /* Allow vertical resize, but not horizontal */
+    min-height: 80px;
 }
 
 hr {
     border: none;
     border-top: 1px solid var(--border-color);
-    margin: 1rem 0;
+    margin: 1.5rem 0; /* More spacing around hr */
 }
 
 /* --- Layout & Sidebar --- */
 .sidebar {
-    width: 240px;
-    min-width: 180px;
+    width: 260px; /* Slightly wider sidebar */
+    min-width: 200px;
     background-color: var(--bg-secondary-color);
-    border-left: 1px solid var(--border-color);
+    border-left: 1px solid var(--border-color); /* Changed to border-left for RTL, assuming it's actually on the right */
     display: flex;
     flex-direction: column;
+    box-shadow: 2px 0 10px var(--shadow-color); /* Add a subtle shadow to the sidebar */
+    transition: width var(--transition-slow); /* Animate width changes */
 }
 
 .sidebar-header {
-    padding: 1rem;
+    padding: 1rem 1.25rem; /* Adjust padding */
     border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    min-height: 60px; /* Ensure consistent header height */
+}
+.sidebar-header h3 {
+    font-weight: 600;
+    font-size: 1.1rem;
 }
 
 .group-list {
     list-style: none;
-    padding: 0.5rem;
+    padding: 0.75rem; /* Add some padding around the list itself */
     overflow-y: auto;
     flex-grow: 1;
 }
 
 .group-item {
-    padding: 0.75rem 1rem;
+    padding: 0.85rem 1.25rem; /* Adjust padding */
     cursor: pointer;
-    transition: var(--transition-fast);
-    border-radius: 6px;
-    margin-bottom: 4px;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-right-color var(--transition-fast);
+    border-radius: 8px; /* Consistent rounding */
+    margin-bottom: 6px; /* Space between items */
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px; /* Increased gap */
+    border-right: 3px solid transparent; /* For active state, assuming RTL */
 }
 
-.group-item:hover { background-color: var(--bg-tertiary-color); }
-.group-item.active { background-color: var(--accent-color); color: white; }
-.group-item .group-count { margin-right: auto; font-size: 0.8em; background: var(--bg-tertiary-color); padding: 2px 6px; border-radius: 4px; }
-.group-item.active .group-count { background: rgba(255, 255, 255, 0.2); }
+.group-item:hover {
+    background-color: var(--bg-tertiary-color);
+}
+.group-item.active {
+    background-color: color-mix(in srgb, var(--accent-color) 15%, transparent);
+    color: var(--accent-color);
+    font-weight: 600;
+    border-right-color: var(--accent-color); /* Highlight for active group */
+}
+.group-item .group-count {
+    margin-right: auto;
+    font-size: 0.85em;
+    background: var(--bg-tertiary-color);
+    color: var(--text-secondary-color);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: normal;
+}
+.group-item.active .group-count {
+    background: var(--accent-color);
+    color: white;
+}
 
 .resizer {
-    width: 5px;
+    width: 6px; /* Slightly thicker resizer */
     cursor: col-resize;
-    background-color: var(--border-color);
+    background-color: var(--bg-color); /* Blend with background */
+    border-right: 1px solid var(--border-color); /* Define edge */
+    border-left: 1px solid var(--border-color);
     z-index: 10;
-    transition: var(--transition-fast);
+    transition: background-color var(--transition-fast);
 }
-.resizer:hover { background-color: var(--accent-color); }
+.resizer:hover {
+    background-color: var(--accent-color);
+    border-right-color: var(--accent-color);
+    border-left-color: var(--accent-color);
+}
 
 /* --- Main Content --- */
-.main-content { flex-grow: 1; display: flex; flex-direction: column; }
-.toolbar { padding: 0.75rem 1rem; background-color: var(--bg-secondary-color); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-.search-container { position: relative; flex-grow: 1; max-width: 400px; }
-.search-container i { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); color: var(--text-secondary-color); }
-#searchBox { padding-right: 35px; }
+.main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-color); /* Ensure main content has base bg */
+}
+.toolbar {
+    padding: 0.75rem 1.25rem; /* Consistent padding */
+    background-color: var(--bg-secondary-color);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    min-height: 60px; /* Consistent header height */
+    box-shadow: 0 2px 5px var(--shadow-color); /* Add shadow to toolbar */
+}
+.search-container {
+    position: relative;
+    flex-grow: 1;
+    max-width: 450px; /* Slightly wider search */
+}
+.search-container i {
+    position: absolute;
+    top: 50%;
+    right: 15px; /* Adjust icon position */
+    transform: translateY(-50%);
+    color: var(--text-secondary-color);
+    font-size: 0.9rem;
+}
+#searchBox {
+    padding-right: 40px; /* Space for the icon */
+}
 
 /* --- Table --- */
-.table-container { flex-grow: 1; overflow: auto; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 0.8rem 1rem; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-th { background-color: var(--bg-secondary-color); position: sticky; top: 0; cursor: pointer; }
-th:hover { background-color: var(--bg-tertiary-color); }
-th .fa-solid { margin-left: 8px; }
-th.checkbox-cell, td.checkbox-cell { width: 40px; text-align: center; padding: 0; }
-tbody tr { transition: background-color var(--transition-fast); }
-tbody tr:hover { background-color: var(--bg-tertiary-color); }
-tbody tr.selected { background-color: color-mix(in srgb, var(--accent-color) 20%, transparent) !important; }
-tbody tr.connected { background-color: color-mix(in srgb, var(--success-color) 20%, transparent) !important; font-weight: bold; }
-.status-cell { display: flex; align-items: center; gap: 8px; }
-.status-indicator { width: 10px; height: 10px; border-radius: 50%; }
-.status-untested { background-color: var(--text-secondary-color); }
-.status-testing { background-color: var(--warning-color); animation: pulse 1.5s infinite; }
-.status-healthy { background-color: var(--success-color); }
-.status-unhealthy { background-color: var(--error-color); }
-.country-cell { display: flex; align-items: center; gap: 8px; }
-.country-flag { width: 20px; height: 15px; border-radius: 2px; box-shadow: 0 0 2px rgba(0,0,0,0.3); }
+.table-container {
+    flex-grow: 1;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin: 1rem; /* Add margin around the table container */
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    padding: 0.9rem 1.1rem; /* Increased padding */
+    text-align: right;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    font-size: 0.9rem; /* Slightly smaller font for table data */
+}
+th {
+    background-color: var(--bg-secondary-color);
+    position: sticky;
+    top: 0;
+    cursor: pointer;
+    font-weight: 600; /* Bolder headers */
+    color: var(--text-color);
+    z-index: 1; /* Ensure header is above table content */
+}
+th:hover {
+    background-color: var(--bg-tertiary-color);
+}
+th .fa-solid {
+    margin-left: 10px; /* More space for sort icon */
+    font-size: 0.8em;
+}
+th.checkbox-cell, td.checkbox-cell {
+    width: 50px; /* Wider checkbox cell */
+    text-align: center;
+    padding: 0;
+}
+td.checkbox-cell input[type="checkbox"] { width: 18px; height: 18px; } /* Style checkboxes */
+th.checkbox-cell input[type="checkbox"] { width: 18px; height: 18px; }
+
+
+tbody tr {
+    transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+tbody tr:last-child td {
+    border-bottom: none; /* Remove border from last row */
+}
+tbody tr:hover {
+    background-color: var(--bg-tertiary-color);
+    box-shadow: inset 0 0 10px color-mix(in srgb, var(--shadow-color) 50%, transparent); /* Inner shadow on hover */
+}
+tbody tr.selected {
+    background-color: color-mix(in srgb, var(--accent-color) 25%, transparent) !important;
+    font-weight: 500;
+}
+tbody tr.connected {
+    background-color: color-mix(in srgb, var(--success-color) 25%, transparent) !important;
+    font-weight: 600; /* Bolder for connected */
+    color: var(--success-color);
+}
+tbody tr.connected:hover {
+    background-color: color-mix(in srgb, var(--success-color) 35%, transparent) !important;
+}
+
+.status-cell { display: flex; align-items: center; gap: 10px; /* Increased gap */ }
+.status-indicator {
+    width: 12px; /* Larger indicator */
+    height: 12px;
+    border-radius: 50%;
+    box-shadow: 0 0 5px currentColor; /* Add a subtle glow matching the color */
+}
+.status-untested { background-color: var(--text-secondary-color); color: var(--text-secondary-color); }
+.status-testing { background-color: var(--warning-color); color: var(--warning-color); animation: pulse 1.5s infinite ease-in-out; }
+.status-healthy { background-color: var(--success-color); color: var(--success-color); }
+.status-unhealthy { background-color: var(--error-color); color: var(--error-color); }
+.country-cell { display: flex; align-items: center; gap: 10px; }
+.country-flag {
+    width: 24px; /* Larger flag */
+    height: 18px;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px var(--shadow-color);
+    background-color: var(--bg-tertiary-color); /* Placeholder bg for flags */
+}
 
 /* --- Status Bar --- */
-.status-bar { padding: 0.5rem 1rem; background-color: var(--bg-secondary-color); border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-.status-left, .status-center, .status-right { display: flex; align-items: center; gap: 1rem; }
-.connect-btn.disconnected { background-color: var(--disconnected-color); }
-.connect-btn.ready { background-color: var(--warning-color); color: black; }
-.connect-btn.connected { background-color: var(--success-color); color: white; }
-#testProgressBar { width: 200px; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; overflow: hidden; }
-#testProgressBar::-webkit-progress-bar { background-color: var(--bg-tertiary-color); }
-#testProgressBar::-webkit-progress-value { background-color: var(--accent-color); transition: width 0.3s; }
-.live-ping-container { color: var(--success-color); font-weight: bold; min-width: 60px; }
+.status-bar {
+    padding: 0.6rem 1.25rem; /* Consistent padding */
+    background-color: var(--bg-secondary-color);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    min-height: 50px; /* Consistent height */
+    box-shadow: 0 -2px 5px var(--shadow-color); /* Shadow on top */
+}
+.status-left, .status-center, .status-right { display: flex; align-items: center; gap: 1.2rem; /* Increased gap */ }
+
+.connect-btn { font-weight: 600; } /* Make connect button text bolder */
+.connect-btn.disconnected { background-color: var(--disconnected-color); color: #fff; }
+.connect-btn.ready { background-color: var(--warning-color); color: #212529; } /* Darker text on yellow for contrast */
+.connect-btn.connected { background-color: var(--success-color); color: #fff; }
+
+#testProgressBar {
+    width: 220px; /* Wider progress bar */
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px; /* Thicker bar */
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border-color); /* Add a border */
+}
+#testProgressBar::-webkit-progress-bar {
+    background-color: var(--bg-tertiary-color);
+}
+#testProgressBar::-webkit-progress-value {
+    background-color: var(--accent-color);
+    transition: width 0.3s ease-in-out;
+    border-radius: 3px 0 0 3px; /* Slightly rounded progress fill */
+}
+.live-ping-container {
+    color: var(--success-color);
+    font-weight: 600; /* Bolder ping */
+    min-width: 70px; /* Wider container */
+    font-size: 0.9em;
+}
+#progressText { font-size: 0.9em; color: var(--text-secondary-color); }
 
 /* --- Modals --- */
-.modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 100; display: none; align-items: center; justify-content: center; }
-.modal { background: var(--bg-secondary-color); border-radius: 8px; box-shadow: 0 5px 20px var(--shadow-color); width: 90%; max-width: 500px; display: flex; flex-direction: column; animation: modal-fade-in 0.3s; }
-.modal.small-modal { max-width: 400px; }
-.modal-header { padding: 1rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-.close-modal-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
-.modal-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
-.form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: color-mix(in srgb, var(--bg-color) 50%, transparent); /* Use theme color for backdrop */
+    backdrop-filter: blur(8px); /* Stronger blur */
+    z-index: 100;
+    display: none; /* Managed by JS */
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* For animation */
+    transition: opacity var(--transition-slow);
+}
+.modal-backdrop.active { opacity: 1; }
+
+.modal {
+    background: var(--bg-secondary-color);
+    border-radius: 12px; /* More rounded modals */
+    box-shadow: 0 8px 30px var(--shadow-color); /* Enhanced shadow */
+    width: 90%;
+    max-width: 550px; /* Slightly wider max-width */
+    display: flex;
+    flex-direction: column;
+    transform: scale(0.95); /* For animation */
+    transition: transform var(--transition-slow);
+    border: 1px solid var(--border-color);
+}
+.modal-backdrop.active .modal { transform: scale(1); }
+
+.modal.small-modal { max-width: 450px; }
+.modal-header {
+    padding: 1.25rem 1.5rem; /* More padding */
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-header h3 { font-size: 1.25rem; font-weight: 600; }
+.close-modal-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.8rem; /* Larger close button */
+    cursor: pointer;
+    color: var(--text-secondary-color);
+    padding: 0.25rem;
+    line-height: 1;
+    transition: color var(--transition-fast), transform var(--transition-fast);
+}
+.close-modal-btn:hover { color: var(--error-color); transform: rotate(90deg); }
+
+.modal-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem; /* Increased gap */
+    max-height: 70vh;
+    overflow-y: auto;
+}
+.form-group { display: flex; flex-direction: column; gap: 0.6rem; }
+.form-group label { font-weight: 500; font-size: 0.95rem; color: var(--text-secondary-color); }
+
 .input-with-btn { display: flex; }
-.input-with-btn input { border-radius: 0 6px 6px 0; border-left: none; }
-.input-with-btn button { border-radius: 6px 0 0 6px; }
-.data-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.input-with-btn input { border-radius: 0 8px 8px 0; border-left: none; } /* Match button radius */
+.input-with-btn button { border-radius: 8px 0 0 8px; } /* Match button radius */
+.input-with-btn button i { margin-left: 0; /* Remove default margin if only icon */ }
+
+.data-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+.data-actions button { width: 100%; } /* Make buttons full width */
+
 .qr-container { align-items: center; text-align: center; }
-#qrCodeImage { background: white; padding: 10px; border-radius: 5px; }
-#qrCodeName { margin-top: 1rem; font-weight: bold; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
+#qrCodeImage {
+    background: white;
+    padding: 15px; /* More padding */
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+#qrCodeName { margin-top: 1.25rem; font-weight: 600; font-size: 1.1rem; }
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1.5rem; /* More margin */
+    padding-top: 1.5rem; /* Add padding for separation */
+    border-top: 1px solid var(--border-color);
+}
 
 /* --- Context Menu --- */
-.context-menu { position: fixed; background-color: var(--bg-secondary-color); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 2px 10px var(--shadow-color); display: none; z-index: 1000; list-style: none; padding: 0.5rem; animation: modal-fade-in 0.1s; }
+.context-menu {
+    position: fixed;
+    background-color: var(--bg-secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px; /* More rounded */
+    box-shadow: 0 5px 15px var(--shadow-color); /* Softer, larger shadow */
+    display: none; /* Managed by JS */
+    z-index: 1000;
+    list-style: none;
+    padding: 0.75rem; /* More padding */
+    min-width: 200px; /* Minimum width */
+    opacity: 0; /* For animation */
+    transform: scale(0.95);
+    transform-origin: top left; /* Animation origin */
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.context-menu.active { opacity: 1; transform: scale(1); }
+
 .context-menu ul { list-style: none; padding: 0; margin: 0; }
-.context-menu li { padding: 0.75rem 1.2rem; cursor: pointer; border-radius: 5px; display: flex; align-items: center; gap: 10px; }
-.context-menu li:hover { background-color: var(--accent-color); color: white; }
-.context-menu li.danger:hover { background-color: var(--error-color); }
-.context-menu hr { border: none; border-top: 1px solid var(--border-color); margin: 0.5rem 0; }
+.context-menu li {
+    padding: 0.85rem 1.35rem; /* Adjust padding */
+    cursor: pointer;
+    border-radius: 8px; /* Consistent rounding */
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.95rem;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.context-menu li i { width: 1.1em; text-align: center; } /* Align icons */
+.context-menu li:hover {
+    background-color: var(--accent-color);
+    color: white;
+}
+.context-menu li.danger:hover {
+    background-color: var(--error-color);
+    color: white;
+}
+.context-menu hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 0.6rem 0; /* Adjust margin */
+}
 
 /* --- Toast Notifications --- */
-.toast-container { position: fixed; bottom: 20px; left: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
-.toast { padding: 12px 20px; border-radius: 6px; color: white; box-shadow: 0 3px 10px rgba(0,0,0,0.2); animation: toast-fade-in 0.3s, toast-fade-out 0.3s 4.7s; }
+.toast-container {
+    position: fixed;
+    bottom: 25px; /* Adjust position */
+    left: 25px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* Increased gap */
+}
+.toast {
+    padding: 15px 25px; /* More padding */
+    border-radius: 8px; /* Consistent rounding */
+    color: white;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.25); /* Enhanced shadow */
+    display: flex; /* For icon alignment */
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+    opacity: 0; /* For animation */
+    transform: translateX(-100%);
+    /* animation: toast-slide-in 0.4s forwards, toast-fade-out 0.4s 4.6s forwards; */ /* JS will handle removal */
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
 .toast.success { background-color: var(--success-color); }
 .toast.error { background-color: var(--error-color); }
 .toast.info { background-color: var(--accent-color); }
+.toast i { font-size: 1.2em; }
+
 
 /* --- Animations --- */
-@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-@keyframes modal-fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-@keyframes toast-fade-in { from { opacity: 0; transform: translateX(-100%); } to { opacity: 1; transform: translateX(0); } }
-@keyframes toast-fade-out { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-100%); } }
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 3px currentColor; }
+    50% { opacity: 0.6; transform: scale(0.9); box-shadow: 0 0 8px currentColor; }
+}
+
+/* Replace modal-fade-in with JS-controlled transitions for backdrop and modal */
+
+/* Replace toast-fade-in and toast-fade-out with JS-controlled transitions */
+/*
+@keyframes toast-slide-in {
+    from { opacity: 0; transform: translateX(-100%); }
+    to { opacity: 1; transform: translateX(0); }
+}
+@keyframes toast-fade-out {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(-100%); }
+}
+*/
