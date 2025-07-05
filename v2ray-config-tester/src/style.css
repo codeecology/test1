@@ -474,9 +474,14 @@ hr {
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
-    min-height: 60px; /* Consistent header height */
-    box-shadow: 0 2px 5px var(--shadow-color); /* Add shadow to toolbar */
+    min-height: 60px;
+    box-shadow: 0 2px 5px var(--shadow-color);
+    flex-wrap: wrap; /* Allow wrapping */
 }
+.toolbar > * { /* Direct children of toolbar */
+    margin-bottom: 0.5rem; /* Add some space when items wrap */
+}
+
 .search-container {
     position: relative;
     flex-grow: 1;
@@ -626,12 +631,19 @@ tbody tr.connected:hover {
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
-    min-height: 50px; /* Consistent height */
-    box-shadow: 0 -2px 5px var(--shadow-color); /* Shadow on top */
+    min-height: 50px;
+    box-shadow: 0 -2px 5px var(--shadow-color);
+    flex-wrap: wrap; /* Allow wrapping for the entire status bar */
+    justify-content: space-around; /* Better distribution when wrapped */
 }
-.status-left, .status-center, .status-right { display: flex; align-items: center; gap: 1.2rem; /* Increased gap */ }
+.status-left, .status-center, .status-right {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem; /* Slightly reduced gap for tighter packing */
+    padding: 0.25rem 0; /* Add some vertical padding if items wrap */
+}
 
-.connect-btn { font-weight: 600; } /* Make connect button text bolder */
+.connect-btn { font-weight: 600; }
 .connect-btn.disconnected { background-color: var(--disconnected-color); color: #fff; }
 .connect-btn.ready { background-color: var(--warning-color); color: #212529; } /* Darker text on yellow for contrast */
 .connect-btn.connected { background-color: var(--success-color); color: #fff; }

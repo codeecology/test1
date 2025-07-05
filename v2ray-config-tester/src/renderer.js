@@ -169,6 +169,11 @@ document.addEventListener('DOMContentLoaded', () => {
             no_configs_in_group_message: "No configurations in group \"{groupName}\".",
             this_group: "this group", // Fallback for group name
             no_healthy_configs_message: "No healthy configurations found.",
+            // Export selected
+            export_selected_btn: "Export Selected",
+            toast_no_configs_selected_export: "No configurations selected for export.",
+            toast_selected_exported_success: "{count} selected config(s) exported successfully.",
+            toast_export_failed: "Export failed: {error}",
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -316,6 +321,11 @@ document.addEventListener('DOMContentLoaded', () => {
             no_configs_in_group_message: "هیچ کانفیگی در گروه «{groupName}» وجود ندارد.",
             this_group: "این گروه",
             no_healthy_configs_message: "هیچ کانفیگ سالمی یافت نشد.",
+            // Export selected - Farsi
+            export_selected_btn: "خروجی منتخب‌ها",
+            toast_no_configs_selected_export: "هیچ کانفیگی برای خروجی انتخاب نشده است.",
+            toast_selected_exported_success: "{count} کانفیگ منتخب با موفقیت صادر شد.",
+            toast_export_failed: "خطا در صدور: {error}",
         }
     };
     const lang = (key, params = {}) => {
@@ -415,7 +425,16 @@ document.addEventListener('DOMContentLoaded', () => {
         updateConnectionButton();
         updateTestUI();
         updateLangUI();
-        updateDashboardStatsInStatusBar(); // Call the new function
+        updateDashboardStatsInStatusBar();
+        updateToolbarButtonStates(); // New function call
+    };
+
+    const updateToolbarButtonStates = () => {
+        const exportSelectedBtn = $('#exportSelectedBtn');
+        if (exportSelectedBtn) {
+            exportSelectedBtn.disabled = state.selectedConfigIds.length === 0;
+        }
+        // Can add other toolbar button state updates here if needed in the future
     };
 
     // Renamed updateDashboard to updateDashboardStatsInStatusBar and using new IDs
@@ -615,6 +634,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // tableBody.innerHTML = ''; // Avoid this
             rowsInNewOrder.forEach(r => tableBody.appendChild(r)); // Re-appends all rows in the new sorted order
         }
+        updateSelectAllCheckboxState(); // Keep this here as it's specific to table rendering
+        updateToolbarButtonStates(); // Add this call here
     };
 
     const renderGroups = () => {
@@ -1359,10 +1380,31 @@ document.addEventListener('DOMContentLoaded', () => {
         // Listeners for #addConfigFromClipboardBtn and others assumed to be in the HTML
         // If #addConfigFromClipboardBtn exists:
         // $('#addConfigFromClipboardBtn').addEventListener('click', handleAddFromClipboard);
-        // The provided index.html does not have: exportAllBtn, exportSelectedBtn, exportGroupBtn, addConfigFromClipboardBtn
+        // The provided index.html does not have: exportAllBtn, exportGroupBtn, addConfigFromClipboardBtn
+        // exportSelectedBtn is now added.
+        safelyAddEventListener('#exportSelectedBtn', 'click', handleExportSelectedConfigs);
     }
 
     // --- Handlers ---
+
+    const handleExportSelectedConfigs = () => {
+        if (state.selectedConfigIds.length === 0) {
+            showToast(lang('toast_no_configs_selected_export'), 'warning'); // Add lang key: toast_no_configs_selected_export
+            return;
+        }
+        const configsToExport = state.configs.filter(c => state.selectedConfigIds.includes(c.id));
+        const content = configsToExport.map(c => c.link).join('\n');
+        const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        window.api.exportFile({ defaultPath: `selected-configs-${date}.txt`, content, isJson: false })
+            .then(success => {
+                if (success) showToast(lang('toast_selected_exported_success', { count: configsToExport.length }), 'success'); // Add lang key
+            })
+            .catch(error => {
+                console.error("Error exporting selected configs:", error);
+                showToast(lang('toast_export_failed', { error: error.message }), 'error'); // Add lang key
+            });
+    };
+
     const handleImportData = async () => {
         try {
             const result = await window.api.importJsonFile();
