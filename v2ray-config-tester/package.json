@@ -1,0 +1,46 @@
+{
+  "name": "ultimate-v2ray-tester",
+  "version": "3.0.0",
+  "description": "نرم‌افزار جامع و نهایی برای مدیریت، تست و اتصال به کانفیگ‌های شبکه",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder"
+  },
+  "author": "Your Professional Developer",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.8",
+    "electron-store": "^8.2.0",
+    "ip-country": "^1.0.2",
+    "qrcode": "^1.5.3",
+    "socks-proxy-agent": "^8.0.3"
+  },
+  "devDependencies": {
+    "electron": "^29.1.5",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.ultimate.v2raytester",
+    "productName": "Ultimate V2Ray Tester",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "./core/",
+        "to": "core",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
+  }
+}
