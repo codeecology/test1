@@ -163,6 +163,12 @@ document.addEventListener('DOMContentLoaded', () => {
             font_small: "Small",
             font_medium: "Medium",
             font_large: "Large",
+            // Messages for empty table states
+            no_configs_yet_message: "No configurations added yet. Click \"Add Config\" or \"Import\".",
+            no_configs_match_search_message: "No configurations match your search term.",
+            no_configs_in_group_message: "No configurations in group \"{groupName}\".",
+            this_group: "this group", // Fallback for group name
+            no_healthy_configs_message: "No healthy configurations found.",
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -304,6 +310,12 @@ document.addEventListener('DOMContentLoaded', () => {
             font_small: "کوچک",
             font_medium: "متوسط",
             font_large: "بزرگ",
+            // Messages for empty table states - Farsi
+            no_configs_yet_message: "هنوز هیچ کانفیگی اضافه نشده. روی «افزودن کانفیگ» یا «ورود از فایل» کلیک کنید.",
+            no_configs_match_search_message: "هیچ کانفیگی با عبارت جستجوی شما مطابقت ندارد.",
+            no_configs_in_group_message: "هیچ کانفیگی در گروه «{groupName}» وجود ندارد.",
+            this_group: "این گروه",
+            no_healthy_configs_message: "هیچ کانفیگ سالمی یافت نشد.",
         }
     };
     const lang = (key, params = {}) => {
@@ -464,13 +476,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderTable = () => {
         const tableBody = $('#configsTableBody');
         const configsToRender = getVisibleConfigs();
-        const colspanValue = 9; // 7 original columns + 1 for Port + 1 for Details
+        const colspanValue = 9;
 
-        if (configsToRender.length === 0 && state.searchTerm === '' && state.activeGroupId === 'all') {
-            tableBody.innerHTML = `<tr><td colspan="${colspanValue}" style="text-align: center; padding: 40px;">No configurations added yet. Click "Add Config" or "Import".</td></tr>`;
-            return;
-        } else if (configsToRender.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="${colspanValue}" style="text-align: center; padding: 40px;">No configurations match the current filter or search term.</td></tr>`;
+        if (configsToRender.length === 0) {
+            let message = lang('no_configs_yet_message') || "No configurations added yet. Click \"Add Config\" or \"Import\"."; // Add lang key: no_configs_yet_message
+            if (state.searchTerm !== '') {
+                message = lang('no_configs_match_search_message') || "No configurations match your search term."; // Add lang key: no_configs_match_search_message
+            } else if (state.activeGroupId !== 'all' && state.activeGroupId !== 'healthy_configs') {
+                // A specific user-created group is selected and it's empty
+                const group = state.groups.find(g => g.id === state.activeGroupId);
+                message = lang('no_configs_in_group_message', { groupName: group ? group.name : lang('this_group') }) || `No configurations in group "${group ? group.name : 'this group'}".`; // Add lang key: no_configs_in_group_message, this_group
+            } else if (state.activeGroupId === 'healthy_configs') {
+                // Healthy group is selected and it's empty
+                 message = lang('no_healthy_configs_message') || "No healthy configurations found."; // Add lang key: no_healthy_configs_message
+            }
+            // If it's 'all' group and empty, the default "No configurations added yet" is appropriate unless state.configs.length > 0,
+            // which implies a bug in getVisibleConfigs if it returns empty for 'all' when configs exist and no search term.
+            // The initial condition (state.searchTerm === '' && state.activeGroupId === 'all') handles the true "empty initial state".
+            // If state.configs.length > 0 but configsToRender is 0 with 'all' group and no search, it's an anomaly.
+            // For now, the above logic should cover most cases.
+
+            tableBody.innerHTML = `<tr><td colspan="${colspanValue}" style="text-align: center; padding: 40px;">${message}</td></tr>`;
             return;
         }
 
@@ -1287,8 +1313,36 @@ document.addEventListener('DOMContentLoaded', () => {
         safelyAddEventListener('#addFromPasteBtn', 'click', handleAddConfigFromText);
         safelyAddEventListener('#addFromFileBtn', 'click', handleImportTextFile);
 
-        // Modals general close buttons
-        safelyAddEventListener('.close-modal-btn, #modalBackdrop', 'click', closeModal, true); // queryAll = true
+        // Modals general close buttons (those explicitly marked with .close-modal-btn)
+        safelyAddEventListener('.close-modal-btn', 'click', (e) => {
+            // If the button has a data-modal-id, it targets a specific modal.
+            // Otherwise, the generic closeModal behavior (closing any active modal) is fine.
+            const modalId = e.target.dataset.modalId || e.target.closest('.close-modal-btn')?.dataset.modalId;
+            if (modalId) {
+                const modalToClose = $(`#${modalId}`);
+                if (modalToClose) {
+                    modalToClose.classList.remove('active');
+                }
+                // Check if any other modals are active before hiding backdrop
+                const anyActiveModals = $$('.modal.active').length > 0;
+                if (!anyActiveModals) {
+                    const backdrop = $('#modalBackdrop');
+                    if (backdrop) {
+                        backdrop.style.display = 'none';
+                        backdrop.classList.remove('active');
+                    }
+                }
+            } else {
+                closeModal(); // Fallback to generic close if no specific modal targeted
+            }
+        }, true);
+
+        // Backdrop click to close
+        safelyAddEventListener('#modalBackdrop', 'click', (e) => {
+            if (e.target.id === 'modalBackdrop') { // Only close if the click is directly on the backdrop
+                closeModal();
+            }
+        });
 
         // Specific cancel buttons for confirm/prompt modals also just close.
         safelyAddEventListener('#confirmCancelBtn', 'click', closeModal);

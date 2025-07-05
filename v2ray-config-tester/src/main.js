@@ -211,13 +211,13 @@ ipcMain.handle('system:get-country', async (event, hostname) => {
         // Let's prefer IPv4 if available, or check what ipCountry supports.
         // For now, we use what dns.lookup gives by default.
 
-        const countryData = ipCountry.lookup(address);
+        const countryData = ipCountry.lookup(address); // 'address' (the IP) is passed to ip-country
 
-        if (countryData) {
-            if (isDev) console.log(`[system:get-country] ipCountry.lookup for ${address} (from ${hostname}): Found country = ${countryData.country}`);
-            return countryData.country;
+        if (countryData && typeof countryData.country === 'string' && countryData.country.length === 2 && countryData.country.toUpperCase() !== 'XX') {
+            if (isDev) console.log(`[system:get-country] ipCountry.lookup for ${address} (from ${hostname}): Found country = ${countryData.country.toUpperCase()}`);
+            return countryData.country.toUpperCase(); // Standardize to uppercase
         } else {
-            if (isDev) console.warn(`[system:get-country] ipCountry.lookup for ${address} (from ${hostname}): No country data found. Returning 'XX'.`);
+            if (isDev) console.warn(`[system:get-country] ipCountry.lookup for ${address} (from ${hostname}): No valid 2-letter country code found. Data:`, countryData);
             return 'XX';
         }
     } catch (error) {
