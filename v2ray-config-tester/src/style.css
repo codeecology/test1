@@ -229,35 +229,39 @@ html[dir="rtl"] .main-content.panel-open {
 /* --- Dashboard --- */
 .dashboard {
     display: flex;
-    justify-content: space-around;
-    align-items: stretch; /* Make items same height if wrapped */
-    padding: 1rem 1.25rem;
-    background-color: var(--bg-secondary-color); /* Or var(--bg-color) if preferred */
+    justify-content: space-between; /* Distribute items evenly */
+    align-items: center; /* Align items vertically */
+    padding: 0.6rem 1rem; /* Reduced padding */
+    background-color: var(--bg-secondary-color);
     border-bottom: 1px solid var(--border-color);
-    gap: 1rem; /* Gap between stat boxes */
-    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    gap: 0.8rem; /* Reduced gap */
+    flex-wrap: nowrap; /* Ensure single row */
+    overflow-x: auto; /* Allow horizontal scrolling if needed on very small screens */
+    min-height: 70px; /* Define a min-height */
 }
 
 .dashboard-stat {
-    background-color: var(--bg-color); /* Stat boxes slightly different from dashboard bg */
-    padding: 1rem 1.25rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px var(--shadow-color);
+    background-color: transparent; /* Remove individual box background */
+    padding: 0.5rem 0.8rem; /* Reduced padding */
+    border-radius: 6px;
+    box-shadow: none; /* Remove individual box shadow */
     display: flex;
     align-items: center;
-    gap: 1rem;
-    flex-grow: 1; /* Allow them to grow */
-    min-width: 200px; /* Minimum width before wrapping */
-    border-left: 4px solid var(--accent-color); /* Accent border */
+    gap: 0.6rem; /* Reduced gap */
+    flex-grow: 0; /* Do not allow them to grow disproportionately */
+    flex-shrink: 0; /* Prevent shrinking too much */
+    /* min-width: 180px; */ /* Remove min-width or set to a smaller flexible value if needed */
+    border-left: 3px solid var(--accent-color); /* Keep accent border, but maybe thinner */
+    height: 100%; /* Make stats take full height of dashboard */
 }
 .dashboard-stat:nth-child(2) { border-left-color: var(--success-color); }
 .dashboard-stat:nth-child(3) { border-left-color: var(--warning-color); }
-.dashboard-stat:nth-child(4) { border-left-color: var(--disconnected-color); } /* Or a specific color for connection status */
+.dashboard-stat:nth-child(4) { border-left-color: var(--disconnected-color); }
 
 .dashboard-stat .stat-icon i {
-    font-size: 2em; /* Larger icons */
-    color: var(--accent-color); /* Match border color */
-    opacity: 0.8;
+    font-size: 1.5em; /* Reduced icon size */
+    color: var(--accent-color);
+    opacity: 0.9;
 }
 .dashboard-stat:nth-child(2) .stat-icon i { color: var(--success-color); }
 .dashboard-stat:nth-child(3) .stat-icon i { color: var(--warning-color); }
@@ -265,15 +269,16 @@ html[dir="rtl"] .main-content.panel-open {
 
 
 .dashboard-stat .stat-info h4 {
-    font-size: 0.9em;
+    font-size: 0.75em; /* Reduced font size */
     color: var(--text-secondary-color);
-    margin-bottom: 0.3rem;
+    margin-bottom: 0.1rem; /* Reduced margin */
     font-weight: 500;
+    white-space: nowrap; /* Prevent title wrapping */
 }
 
 .dashboard-stat .stat-info p {
-    font-size: 1.4em; /* Larger stat number */
-    font-weight: 700;
+    font-size: 1.1em; /* Reduced stat number size */
+    font-weight: 600; /* Slightly less bold */
     color: var(--text-color);
     margin: 0;
 }
@@ -745,6 +750,7 @@ tbody tr.connected:hover {
 
 .context-menu ul { list-style: none; padding: 0; margin: 0; }
 .context-menu li {
+    position: relative; /* For submenu positioning */
     padding: 0.85rem 1.35rem; /* Adjust padding */
     cursor: pointer;
     border-radius: 8px; /* Consistent rounding */
@@ -768,6 +774,45 @@ tbody tr.connected:hover {
     border-top: 1px solid var(--border-color);
     margin: 0.6rem 0; /* Adjust margin */
 }
+
+/* Submenu specific styles */
+.context-menu li.submenu-parent > .context-submenu {
+    display: none; /* Hidden by default */
+    position: absolute;
+    left: 100%; /* Position to the right of the parent */
+    top: -0.75rem; /* Align with the top of the parent li's padding */
+    background-color: var(--bg-secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: 0 5px 15px var(--shadow-color);
+    z-index: 1001; /* Above main context menu */
+    padding: 0.75rem;
+    min-width: 180px; /* Or same as main menu */
+    opacity: 0;
+    transform: translateX(10px); /* Start slightly to the right for animation */
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
+    pointer-events: none; /* Prevent interaction when hidden */
+}
+
+.context-menu li.submenu-parent:hover > .context-submenu {
+    display: block; /* Show on hover */
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto; /* Allow interaction when visible */
+}
+
+.context-menu .submenu-arrow {
+    margin-right: auto; /* Pushes arrow to the far side (assuming LTR text in menu) */
+    margin-left: 8px; /* Space from text to arrow */
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+}
+html[dir="rtl"] .context-menu .submenu-arrow {
+    margin-left: auto;
+    margin-right: 8px;
+    transform: scaleX(-1); /* Flip arrow for RTL */
+}
+
 
 /* --- Toast Notifications --- */
 .toast-container {

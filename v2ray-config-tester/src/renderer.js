@@ -415,7 +415,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         configsToRender.forEach(config => {
             const groupName = state.groups.find(g => g.id === config.groupId)?.name || '-'; // This is not directly used in cell content below but good for context
-            const countryFlag = config.country ? `<img src="https://flagcdn.com/${config.country.toLowerCase()}.svg" class="country-flag" alt="${config.country}">` : '';
+            let countryFlagHtml = '';
+            if (config.country && config.country.toUpperCase() !== 'XX' && config.country.length === 2) { // Ensure it's a 2-letter code and not 'XX'
+                countryFlagHtml = `<img src="https://flagcdn.com/${config.country.toLowerCase()}.svg" class="country-flag" alt="${config.country}" onerror="this.style.display='none'; this.nextSibling.textContent='${config.country}';">`;
+            } else if (config.country && config.country.toUpperCase() === 'XX') {
+                // Do not attempt to load xx.svg, just show XX text or a placeholder icon if desired
+                // countryFlagHtml will remain empty, and the span below will show 'XX'
+            }
+            // For any other invalid country codes, countryFlagHtml also remains empty.
+
             const isSelected = state.selectedConfigIds.includes(config.id);
             const isConnected = config.id === state.activeConnectionId;
 
@@ -519,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="checkbox-cell"><input type="checkbox" ${isSelected ? 'checked' : ''}></td>
                     <td class="status-cell"><span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span></td>
                     <td title="${config.name}">${config.name}</td>
-                    <td class="country-cell">${countryFlag}<span>${config.country || ''}</span></td>
+                    <td class="country-cell">${countryFlagHtml}<span>${config.country || ''}</span></td>
                     <td>${formatDelay(config.delay)}</td>
                     <td>${config.protocol}</td>
                     <td>${config.network}</td>
@@ -680,10 +688,32 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!link || !/^(vless|vmess|trojan|ss):\/\//.test(link) || existingLinks.has(link)) continue;
             try {
                 const url = new URL(link);
-                const name = decodeURIComponent(url.hash.substring(1)) || `${url.hostname}:${url.port}`;
+                let name = decodeURIComponent(url.hash.substring(1)) || `${url.hostname}:${url.port}`; // Default name
+                let displayPort = url.port || '-'; // Default port
+
+                // Attempt to get port for VMess for display purposes
+                if (link.startsWith('vmess://')) {
+                    try {
+                        const b64decoded = Buffer.from(link.substring(8), 'base64').toString('utf-8');
+                        const vmessJson = JSON.parse(b64decoded);
+                        if (vmessJson.port) {
+                            displayPort = vmessJson.port.toString();
+                        }
+                        // Update name if not set by fragment and address/port are available
+                        if (!url.hash.substring(1) && vmessJson.add && vmessJson.port) {
+                            name = `${vmessJson.add}:${vmessJson.port}`;
+                        }
+                    } catch (e) {
+                        console.warn(`Could not parse VMess JSON for display details (link: ${link}):`, e.message);
+                        // displayPort remains url.port or '-'
+                        // name remains default
+                    }
+                }
+
+
                 let country = 'XX'; // Default country code
                 try {
-                    country = await window.api.getCountry(url.hostname);
+                    country = await window.api.getCountry(url.hostname || (link.startsWith('vmess://') ? name.split(':')[0] : '')); // Fallback to parsed address for vmess if url.hostname is empty
                 } catch (countryError) {
                     console.warn(`Failed to get country for ${url.hostname}:`, countryError.message);
                     // Use default 'XX' and proceed
@@ -719,16 +749,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.configs.push({
                     id: `cfg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     link, name, country,
-                    address: url.hostname,
+                    address: url.hostname, // This might be empty for VMess if not parsed from JSON yet for display
                     protocol: protocolName,
                     // 'network' is used for the table column, 'networkType' for details to avoid conflict
                     network: configDetails.networkType, // Keep existing 'network' field for direct display
-                    portToDisplay: url.port || '-', // Store port for direct display in table
+                    portToDisplay: displayPort, // Use the potentially VMess-parsed port
                     status: 'untested', delay: null,
                     // Fix: Assign to active group if not 'all', otherwise null
                     groupId: state.activeGroupId && state.activeGroupId !== 'all' ? state.activeGroupId : null,
                     // Store extracted details (these are used by formatDetails)
-                    port: configDetails.port, // Keep this for formatDetails consistency
+                    // 'port' in configDetails is still from url.port, which is fine for its purpose
+                    port: configDetails.port,
                     security: configDetails.security,
                     sni: configDetails.sni,
                     fp: configDetails.fp,
@@ -858,20 +889,50 @@ document.addEventListener('DOMContentLoaded', () => {
                     li.classList.add('disabled');
                 } else if (typeof item.action === 'function') {
                     li.addEventListener('click', (clickEvent) => {
-                        clickEvent.stopPropagation(); // Prevent click from bubbling to document listener immediately
-                        item.action();
-                        menu.style.display = 'none';
-                        menu.classList.remove('active');
+                        // If it's a submenu parent, don't close the main menu immediately on click.
+                        // Actual submenu display logic will be handled by hover or a more complex click management.
+                        // For now, we assume action will handle its own logic or it's a non-actionable parent.
+                        if (!item.submenu) {
+                            clickEvent.stopPropagation();
+                            item.action();
+                            menu.style.display = 'none';
+                            menu.classList.remove('active');
+                        } else {
+                            // Potentially toggle submenu visibility here if click-to-open is desired
+                        }
                     });
-                } else if (item.submenu) {
-                    // This is a submenu parent. For now, make it non-interactive or style it.
-                    // Full submenu functionality is a later enhancement.
-                    li.classList.add('submenu-parent'); // Add a class for styling
+                }
+
+                if (item.submenu && Array.isArray(item.submenu)) {
+                    li.classList.add('submenu-parent');
                     const arrow = document.createElement('span');
-                    arrow.className = 'submenu-arrow'; // Style this with CSS
-                    arrow.innerHTML = ' &raquo;'; // Example arrow
+                    arrow.className = 'submenu-arrow';
+                    arrow.innerHTML = ' &raquo;'; // Or a FontAwesome icon
                     li.appendChild(arrow);
-                    // Make it non-clickable for now, or setup hover to show submenu later
+
+                    const subMenuUl = document.createElement('ul');
+                    subMenuUl.className = 'context-submenu';
+                    item.submenu.forEach(subItem => {
+                        const subLi = document.createElement('li');
+                        if (subItem.iconClass) {
+                            const subIcon = document.createElement('i');
+                            subItem.iconClass.split(' ').forEach(cls => subIcon.classList.add(cls));
+                            subLi.appendChild(subIcon);
+                        }
+                        subLi.appendChild(document.createTextNode(subItem.label));
+                        if (subItem.disabled) {
+                            subLi.classList.add('disabled');
+                        } else {
+                            subLi.addEventListener('click', (subClickEvent) => {
+                                subClickEvent.stopPropagation();
+                                subItem.action();
+                                menu.style.display = 'none'; // Close main menu
+                                menu.classList.remove('active');
+                            });
+                        }
+                        subMenuUl.appendChild(subLi);
+                    });
+                    li.appendChild(subMenuUl);
                 }
                 ul.appendChild(li);
             }
@@ -1993,26 +2054,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Assign to Group Options ---
         if (state.selectedConfigIds.length > 0) {
-            items.push({ type: 'separator' });
-            items.push({ label: lang('assign_to_group'), disabled: true });
-
+            const groupSubmenuItems = [];
             state.groups.forEach(g => {
-                items.push({
-                    label: `  ${g.name}`,
+                groupSubmenuItems.push({
+                    label: g.name, // No indent needed for submenu items
                     action: () => handleAssignToGroup(g.id)
                 });
             });
-            items.push({ type: 'separator' });
-            items.push({
-                label: `  ${lang('assign_to_new_group')}`,
+            groupSubmenuItems.push({ type: 'separator' });
+            groupSubmenuItems.push({
+                label: lang('assign_to_new_group'), // Already localized
                 action: () => handleAssignToGroup('new')
             });
-            if (state.selectedConfigIds.some(id => state.configs.find(c => c.id === id)?.groupId !== null)) {
-                items.push({
-                    label: `  ${lang('ungroup_config')}`,
-                    action: () => handleAssignToGroup(null)
+            // Only show "Ungroup" if at least one selected config is actually in a group
+            if (state.selectedConfigIds.some(id => {
+                const config = state.configs.find(c => c.id === id);
+                return config && config.groupId !== null;
+            })) {
+                groupSubmenuItems.push({ type: 'separator' }); // Separator before Ungroup
+                groupSubmenuItems.push({
+                    label: lang('ungroup_config'), // Already localized
+                    action: () => handleAssignToGroup(null) // null groupId means ungroup
                 });
             }
+
+            items.push({ type: 'separator' });
+            items.push({
+                label: lang('assign_to_group'), // Main menu item
+                submenu: groupSubmenuItems.length > 0 ? groupSubmenuItems : [{label: lang('no_groups_available'), disabled: true}], // Handle case with no groups
+                // No direct action for the parent, action is handled by subitems
+            });
             items.push({ type: 'separator' });
         }
         // --- End Assign to Group Options ---
