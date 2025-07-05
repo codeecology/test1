@@ -404,105 +404,130 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     function addEventListeners() {
+        // Toolbar buttons
         $('#openAddModalBtn').addEventListener('click', () => openModal('addConfigModal'));
-        $('#settingsBtn').addEventListener('click', () => openModal('settingsModal'));
-        $('#saveSettingsBtn').addEventListener('click', handleSaveSettings);
-        $('#addConfigFromTextBtn').addEventListener('click', handleAddConfigFromText);
-        $('#importFileBtn').addEventListener('click', handleImportTextFile);
-        // Add similar listeners for export, fetch subscription, clear all data, etc.
-        // These will call the new handlers defined below.
+        $('#deleteUnhealthyBtn').addEventListener('click', handleDeleteUnhealthy);
+        $('#startTestBtn').addEventListener('click', handleStartTest);
+        $('#stopTestBtn').addEventListener('click', () => window.api.stopTests());
 
-        $('#startTestBtn').addEventListener('click', () => handleStartTest()); // Assuming handleStartTest is defined
-        $('#stopTestBtn').addEventListener('click', () => window.api.stopTests()); // This is a send, not invoke, usually no return promise to catch here unless API changes
-        $('#connectBtn').addEventListener('click', handleConnectToggle); // Assuming handleConnectToggle is defined
+        // Search
+        $('#searchBox').addEventListener('input', handleSearch); // Corrected ID: searchBox
 
-        // Example for a clear all data button if it exists:
-        // $('#clearAllDataBtn').addEventListener('click', handleClearAllData);
-
-        // Group list click (delegated)
+        // Sidebar
+        $('#addGroupBtn').addEventListener('click', handleAddGroup); // Corrected ID: addGroupBtn
         $('#groupList').addEventListener('click', handleGroupClick);
 
-        // Config table click (delegated for selection, context menu)
+        // Main table
         $('#configsTableBody').addEventListener('click', handleTableClick);
         $('#configsTableBody').addEventListener('contextmenu', handleTableContextMenu);
-        
-        // Search input
-        $('#searchInput').addEventListener('input', handleSearch);
-
-        // Modal close buttons
-        $$('.modal .close-btn, #modalBackdrop').forEach(el => el.addEventListener('click', closeModal));
-        $('#confirmCancelBtn').addEventListener('click', closeModal); // Specific cancel for confirm
-        $('#promptCancelBtn').addEventListener('click', closeModal);   // Specific cancel for prompt
-
-        // Header sort
         $('#configsTable th[data-sort]').forEach(th => th.addEventListener('click', handleSortClick));
+        // Listener for #selectAllCheckbox would go here if implemented
 
-        // Other buttons
-        $('#deleteUnhealthyBtn').addEventListener('click', handleDeleteUnhealthy);
-        $('#addConfigFromClipboardBtn').addEventListener('click', handleAddFromClipboard); // Assuming handler exists
-        $('#exportAllBtn').addEventListener('click', () => handleExportConfigs(state.configs, 'all-configs.txt')); // Example
-        $('#exportSelectedBtn').addEventListener('click', () => {
-            const selectedConfigs = state.configs.filter(c => state.selectedConfigIds.includes(c.id));
-            handleExportConfigs(selectedConfigs, 'selected-configs.txt');
-        });
-         $('#exportGroupBtn').addEventListener('click', () => {
-            if (state.activeGroupId && state.activeGroupId !== 'all') {
-                const groupConfigs = state.configs.filter(c => c.groupId === state.activeGroupId);
-                const group = state.groups.find(g => g.id === state.activeGroupId);
-                handleExportConfigs(groupConfigs, `${group ? group.name.replace(/\s+/g, '_') : 'group'}-configs.txt`);
-            } else {
-                showToast('Please select a group to export.', 'info');
-            }
-        });
-        $('#fetchSubBtn').addEventListener('click', handleFetchSubscription);
-        $('#addNewGroupBtn').addEventListener('click', handleAddGroup);
-
-
-        // Theme toggle
-        $('#themeToggle').addEventListener('click', () => {
+        // Status bar
+        $('#connectBtn').addEventListener('click', handleConnectToggle);
+        $('#settingsBtn').addEventListener('click', () => openModal('settingsModal'));
+        $('#themeToggleBtn').addEventListener('click', () => { // Corrected ID: themeToggleBtn
             state.currentTheme = state.currentTheme === 'dark-theme' ? 'light-theme' : 'dark-theme';
             document.body.className = state.currentTheme;
             localStorage.setItem('theme', state.currentTheme);
+            // Update icon on theme toggle btn
+            const icon = $('#themeToggleBtn i');
+            if (icon) icon.className = state.currentTheme === 'dark-theme' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
         });
-
-        // Language toggle (basic example)
-        $('#langToggle').addEventListener('click', () => {
+        $('#langToggleBtn').addEventListener('click', () => { // Corrected ID: langToggleBtn
             state.currentLanguage = state.currentLanguage === 'en' ? 'fa' : 'en';
-            // In a real app, you'd likely store this preference and re-render all text.
-            updateLangUI(); // Make sure this re-renders all text
-            renderAll(); // Re-render table and other elements that might have lang specific text
+            updateLangUI();
+            renderAll();
         });
 
+        // Settings Modal Buttons
+        // Removed listener for non-existent #saveSettingsBtn. Saving is now part of individual actions or modal close.
+        // The inputs #concurrentTestsInput, #testTimeoutInput, #testUrlInput are read in handleSaveSettings which needs to be triggered appropriately.
+        // Let's assume for now that settings are saved implicitly when the modal is closed or explicitly by a different button.
+        // For now, I will ensure handleSaveSettings is callable and correctly reads values.
+        // If there's a generic "OK" or "Apply" button for settings modal, it should call handleSaveSettings.
+        // The current settings modal in HTML doesn't have a general save/apply button, only data action buttons.
+        // Let's add a listener to the settings modal's close button as a *proxy* for saving. This is not ideal UX but fixes the missing link.
+        $$('.close-modal-btn[data-modal-id="settingsModal"]').forEach(btn => btn.addEventListener('click', handleSaveSettings)); // Save on close
 
-        // Context menu action listeners (these would be set up when context menu is shown)
-        // This is conceptual as the context menu is dynamically created.
-        // Actions like 'Copy Link', 'Delete', 'Edit Name' would be handled by functions
-        // called from the context menu click handlers.
+        $('#importDataBtn').addEventListener('click', () => { /* TODO: Handler for importDataBtn (JSON import) */ showToast('JSON import not yet implemented.', 'info'); });
+        $('#exportDataBtn').addEventListener('click', () => { /* TODO: Handler for exportDataBtn (JSON export) */ showToast('JSON export not yet implemented.', 'info'); });
+        $('#exportHealthyBtn').addEventListener('click', () => { // Export healthy configs as text
+            const healthyConfigs = state.configs.filter(c => c.status === 'healthy');
+            handleExportConfigs(healthyConfigs, 'healthy-configs.txt');
+        });
+        $('#clearAllDataBtn').addEventListener('click', handleClearAllData);
+
+
+        // Add Config Modal Buttons
+        $('#addFromSubLinkBtn').addEventListener('click', handleFetchSubscription); // Corrected ID
+        $('#addFromPasteBtn').addEventListener('click', handleAddConfigFromText); // Corrected ID
+        $('#addFromFileBtn').addEventListener('click', handleImportTextFile); // Corrected ID
+
+        // Modals general close buttons
+        $$('.modal .close-btn, #modalBackdrop').forEach(el => {
+            if (!el.classList.contains('close-modal-btn') || el.dataset.modalId !== 'settingsModal') { // Avoid double-binding save for settings close
+                el.addEventListener('click', closeModal);
+            }
+        });
+        $('#confirmCancelBtn').addEventListener('click', closeModal);
+        $('#promptCancelBtn').addEventListener('click', closeModal);
+
+        // For export buttons that were previously conceptual:
+        // These are just examples, assuming such buttons exist with these IDs.
+        // If #exportAllBtn, #exportSelectedBtn, #exportGroupBtn exist, their listeners would be here.
+        // Based on index.html, these specific buttons are not present.
+        // I will remove the listeners for these non-existent buttons to prevent errors.
+        // The functionality is in handleExportConfigs, which is called by exportHealthyBtn.
+        // If general export buttons are added to HTML, listeners can be reinstated.
+
+        // Listeners for #addConfigFromClipboardBtn and others assumed to be in the HTML
+        // If #addConfigFromClipboardBtn exists:
+        // $('#addConfigFromClipboardBtn').addEventListener('click', handleAddFromClipboard);
+        // The provided index.html does not have: exportAllBtn, exportSelectedBtn, exportGroupBtn, addConfigFromClipboardBtn
     }
 
     // --- Handlers ---
     const handleSaveSettings = () => {
-        state.settings.concurrentTests = parseInt($('#concurrentTestsInput').value, 10) || 10;
-        state.settings.testTimeout = parseInt($('#testTimeoutInput').value, 10) || 8;
-        state.settings.testUrl = $('#testUrlInput').value || 'http://cp.cloudflare.com/generate_204';
-        saveAllData();
-        closeModal();
-        showToast('Settings saved!', 'success');
+        // This function is now called when the settings modal is closed.
+        const concurrentTests = parseInt($('#concurrentTestsInput').value, 10);
+        const testTimeout = parseInt($('#testTimeoutInput').value, 10);
+        const testUrl = $('#testUrlInput').value;
+
+        let changed = false;
+        if (!isNaN(concurrentTests) && concurrentTests > 0 && state.settings.concurrentTests !== concurrentTests) {
+            state.settings.concurrentTests = concurrentTests;
+            changed = true;
+        }
+        if (!isNaN(testTimeout) && testTimeout > 0 && state.settings.testTimeout !== testTimeout) {
+            state.settings.testTimeout = testTimeout;
+            changed = true;
+        }
+        if (testUrl && state.settings.testUrl !== testUrl) {
+            state.settings.testUrl = testUrl;
+            changed = true;
+        }
+
+        if (changed) {
+            saveAllData();
+            showToast('Settings saved!', 'success');
+        }
+        // closeModal() will be handled by the button that calls this, or by generic modal close.
     };
 
-    const handleAddConfigFromText = () => {
-        const text = $('#addConfigTextArea').value;
+    const handleAddConfigFromText = () => { // Now correctly associated with addFromPasteBtn
+        const text = $('#pasteArea').value; // Corrected ID: pasteArea
         if (text) {
             const links = text.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
-            processAndAddConfigs(links); // This now has internal error handling for getCountry
-            $('#addConfigTextArea').value = ''; // Clear textarea
-            closeModal();
+            processAndAddConfigs(links);
+            $('#pasteArea').value = ''; // Clear textarea
+            closeModal(); // Assuming this button is within a modal that should close
         } else {
             showToast('Text area is empty.', 'warning');
         }
     };
 
-    const handleImportTextFile = () => {
+    const handleImportTextFile = () => { // Now correctly associated with addFromFileBtn
         window.api.importTextFile()
             .then(fileContent => {
                 if (fileContent === null) return; // User cancelled dialog
