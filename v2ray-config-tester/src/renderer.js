@@ -167,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setting_real_delay_url: "Real Delay Test URL",
             setting_real_delay_pings: "Number of Pings",
             setting_real_delay_timeout: "Ping Timeout (ms)",
+            settings_column_visibility_title: "Column Visibility", // Already added this one
             // Messages for empty table states
             no_configs_yet_message: "No configurations added yet. Click \"Add Config\" or \"Import\".",
             no_configs_match_search_message: "No configurations match your search term.",
@@ -180,6 +181,21 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_no_configs_selected_test: "No configurations selected for testing.",
             toast_selected_exported_success: "{count} selected config(s) exported successfully.",
             toast_export_failed: "Export failed: {error}",
+            // Detail panel specific
+            error_message_detail: "Error Message",
+            real_delay_avg_detail: "Real Delay (Avg)",
+            real_delay_error_detail: "Real Delay Error",
+            // Group Subscriptions
+            prompt_group_sub_url_title: "Group Subscription URL",
+            prompt_group_sub_url_message: "Enter subscription URL (leave empty to remove):",
+            toast_group_sub_url_removed: "Subscription URL removed for group \"{groupName}\".",
+            toast_group_sub_url_set: "Subscription URL set for group \"{groupName}\".",
+            confirm_update_sub_now_title: "Update Subscription",
+            confirm_update_sub_now_message: "Subscription URL for group \"{groupName}\" has been set/changed. Update now?",
+            toast_invalid_sub_url: "Invalid subscription URL.",
+            toast_no_sub_url_for_group: "No subscription URL set for group \"{groupName}\".",
+            toast_fetching_group_sub: "Fetching subscription for group \"{groupName}\"...",
+            toast_failed_fetch_group_sub: "Failed to fetch subscription for group \"{groupName}\": {error}",
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -325,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setting_real_delay_url: "آدرس تست تأخیر واقعی",
             setting_real_delay_pings: "تعداد پینگ‌ها",
             setting_real_delay_timeout: "زمان انتظار پینگ (میلی‌ثانیه)",
+            settings_column_visibility_title: "نمایش ستون‌ها", // Already added
             // Messages for empty table states - Farsi
             no_configs_yet_message: "هنوز هیچ کانفیگی اضافه نشده. روی «افزودن کانفیگ» یا «ورود از فایل» کلیک کنید.",
             no_configs_match_search_message: "هیچ کانفیگی با عبارت جستجوی شما مطابقت ندارد.",
@@ -338,6 +355,21 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_no_configs_selected_test: "هیچ کانفیگی برای تست انتخاب نشده است.",
             toast_selected_exported_success: "{count} کانفیگ منتخب با موفقیت صادر شد.",
             toast_export_failed: "خطا در صدور: {error}",
+            // Detail panel specific - Farsi
+            error_message_detail: "پیام خطا",
+            real_delay_avg_detail: "تأخیر واقعی (میانگین)",
+            real_delay_error_detail: "خطای تأخیر واقعی",
+            // Group Subscriptions - Farsi
+            prompt_group_sub_url_title: "آدرس URL اشتراک گروه",
+            prompt_group_sub_url_message: "آدرس URL اشتراک را وارد کنید (برای حذف خالی بگذارید):",
+            toast_group_sub_url_removed: "آدرس اشتراک برای گروه «{groupName}» حذف شد.",
+            toast_group_sub_url_set: "آدرس اشتراک برای گروه «{groupName}» تنظیم شد.",
+            confirm_update_sub_now_title: "به‌روزرسانی اشتراک",
+            confirm_update_sub_now_message: "آدرس اشتراک گروه «{groupName}» تنظیم/تغییر کرد. آیا الان به‌روزرسانی می‌کنید؟",
+            toast_invalid_sub_url: "آدرس URL اشتراک نامعتبر است.",
+            toast_no_sub_url_for_group: "هیچ آدرس اشتراکی برای گروه «{groupName}» تنظیم نشده.",
+            toast_fetching_group_sub: "در حال دریافت اشتراک برای گروه «{groupName}»...",
+            toast_failed_fetch_group_sub: "خطا در دریافت اشتراک برای گروه «{groupName}»: {error}",
         }
     };
     const lang = (key, params = {}) => {
@@ -429,8 +461,92 @@ document.addEventListener('DOMContentLoaded', () => {
         state.settings.fontSize = size; // Keep track of current setting
     };
 
+    const columnDefinitions = [
+        // Checkbox column is always visible, not part of this setting
+        { key: 'status', langKey: 'status', defaultVisible: true, index: 1 },
+        { key: 'name', langKey: 'name', defaultVisible: true, index: 2 },
+        { key: 'country', langKey: 'country', defaultVisible: true, index: 3 },
+        { key: 'delay', langKey: 'delay', defaultVisible: true, index: 4 },
+        { key: 'protocol', langKey: 'protocol', defaultVisible: true, index: 5 },
+        { key: 'network', langKey: 'network', defaultVisible: true, index: 6 },
+        { key: 'port', langKey: 'port', defaultVisible: true, index: 7 },
+        { key: 'details', langKey: 'details', defaultVisible: true, index: 8 }
+    ];
+
+    const initializeColumnVisibility = () => {
+        if (!state.settings.columnVisibility) {
+            state.settings.columnVisibility = {};
+        }
+        columnDefinitions.forEach(col => {
+            if (state.settings.columnVisibility[col.key] === undefined) {
+                state.settings.columnVisibility[col.key] = col.defaultVisible;
+            }
+        });
+    };
+
+    const populateColumnVisibilitySettings = () => {
+        const container = $('#columnVisibilitySettings');
+        if (!container) return;
+        container.innerHTML = ''; // Clear old checkboxes
+
+        initializeColumnVisibility(); // Ensure defaults are set
+
+        columnDefinitions.forEach(col => {
+            const div = document.createElement('div');
+            div.className = 'checkbox-group';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `col-toggle-${col.key}`;
+            checkbox.dataset.columnKey = col.key;
+            checkbox.checked = state.settings.columnVisibility[col.key];
+
+            const label = document.createElement('label');
+            label.htmlFor = checkbox.id;
+            label.textContent = lang(col.langKey) || col.key.charAt(0).toUpperCase() + col.key.slice(1);
+
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            container.appendChild(div);
+        });
+    };
+
+    const applyColumnVisibility = () => {
+        initializeColumnVisibility(); // Ensure settings are initialized
+
+        const table = $('#configsTable');
+        if (!table) return;
+        const headerRow = table.querySelector('thead tr');
+        const bodyRows = table.querySelectorAll('tbody tr');
+
+        // Checkbox column (index 0) is always visible
+        if (headerRow) headerRow.cells[0].style.display = '';
+        bodyRows.forEach(row => { if(row.cells[0]) row.cells[0].style.display = ''; });
+
+        columnDefinitions.forEach(colDef => {
+            const visible = state.settings.columnVisibility[colDef.key];
+            if (headerRow && headerRow.cells[colDef.index]) {
+                headerRow.cells[colDef.index].style.display = visible ? '' : 'none';
+            }
+            bodyRows.forEach(row => {
+                // Check if it's a config data row, not the "empty table" message row
+                if (row.dataset.id && row.cells[colDef.index]) {
+                    row.cells[colDef.index].style.display = visible ? '' : 'none';
+                }
+            });
+        });
+        // Adjust colspan for "empty table" message row if it exists
+        const emptyRow = table.querySelector('tbody tr td[colspan]');
+        if (emptyRow) {
+            const visibleColumnCount = 1 + columnDefinitions.filter(cd => state.settings.columnVisibility[cd.key]).length;
+            emptyRow.setAttribute('colspan', visibleColumnCount.toString());
+        }
+    };
+
+
     // --- Render Functions ---
     const renderAll = () => {
+        applyColumnVisibility(); // Apply visibility before rendering table
         renderTable();
         renderGroups();
         updateStatusBar();
@@ -704,6 +820,22 @@ document.addEventListener('DOMContentLoaded', () => {
             editBtn.dataset.groupId = group.id;
             actionsSpan.appendChild(editBtn);
 
+            const subBtn = document.createElement('i');
+            subBtn.className = 'fa-solid fa-link btn-manage-group-sub';
+            subBtn.title = group.subscriptionUrl ? 'Edit Subscription URL / Update' : 'Set Subscription URL';
+            subBtn.dataset.groupId = group.id;
+            actionsSpan.appendChild(subBtn);
+
+            // Add an update-specific button if URL exists, for clarity
+            if (group.subscriptionUrl) {
+                const updateSubBtn = document.createElement('i');
+                updateSubBtn.className = 'fa-solid fa-sync btn-update-group-sub';
+                updateSubBtn.title = `Update Subscription (Last: ${group.lastUpdated ? new Date(group.lastUpdated).toLocaleDateString() : 'Never'})`;
+                updateSubBtn.dataset.groupId = group.id;
+                actionsSpan.appendChild(updateSubBtn);
+            }
+
+
             const deleteBtn = document.createElement('i');
             deleteBtn.className = 'fa-solid fa-trash-alt btn-delete-group';
             deleteBtn.title = 'Delete group';
@@ -786,15 +918,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     };
 
-    const processAndAddConfigs = async (linksArray) => {
+    const processAndAddConfigs = async (linksArray, targetGroupId = null) => { // Added targetGroupId parameter
         const existingLinks = new Set(state.configs.map(c => c.link));
         let addedCount = 0;
         let failedCount = 0;
 
         for (const link of linksArray) {
+            // Global duplicate check still applies
             if (!link || !/^(vless|vmess|trojan|ss):\/\//.test(link) || existingLinks.has(link)) {
-                if (existingLinks.has(link) && isDev) { // Only log duplicates in dev mode
-                    console.warn(`Skipping duplicate config link: ${link}`);
+                if (existingLinks.has(link) && isDev) {
+                    console.warn(`Skipping duplicate config link (globally): ${link}`);
                 }
                 continue;
             }
@@ -882,7 +1015,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     network: networkType,
                     portToDisplay: displayPort,
                     status: 'untested', delay: null,
-                    groupId: state.activeGroupId && state.activeGroupId !== 'all' ? state.activeGroupId : null,
+                    // Assign to targetGroupId if provided, otherwise to current active group (or null if 'all' or 'healthy_configs')
+                    groupId: targetGroupId || (state.activeGroupId && state.activeGroupId !== 'all' && state.activeGroupId !== 'healthy_configs' ? state.activeGroupId : null),
                     // Store key details for display and potential filtering
                     security: security,
                     sni: sni,
@@ -961,6 +1095,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (realDelayTestPingsInput) realDelayTestPingsInput.value = state.settings.realDelayTestPings || 3; else console.warn('#realDelayTestPingsInput not found');
             const realDelayTestTimeoutInput = $('#realDelayTestTimeoutInput');
             if (realDelayTestTimeoutInput) realDelayTestTimeoutInput.value = state.settings.realDelayTestTimeout || 2000; else console.warn('#realDelayTestTimeoutInput not found');
+
+            // Populate Column Visibility settings
+            populateColumnVisibilitySettings();
 
         } else if (modalId === 'promptModal') {
             const promptInput = $('#promptInput');
@@ -1294,6 +1431,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const groupItem = e.target.closest('.group-item');
             const editBtn = e.target.closest('.btn-edit-group');
             const deleteBtn = e.target.closest('.btn-delete-group');
+            const manageSubBtn = e.target.closest('.btn-manage-group-sub');
+            const updateSubBtn = e.target.closest('.btn-update-group-sub');
 
             if (editBtn && groupItem) {
                 const groupId = editBtn.dataset.groupId;
@@ -1305,7 +1444,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (groupId && groupId !== 'all' && groupId !== 'healthy_configs') {
                     handleDeleteGroup(groupId);
                 }
-            } else if (groupItem) {
+            } else if (manageSubBtn && groupItem) {
+                const groupId = manageSubBtn.dataset.groupId;
+                 if (groupId && groupId !== 'all' && groupId !== 'healthy_configs') {
+                    handleManageGroupSubscription(groupId);
+                }
+            } else if (updateSubBtn && groupItem) {
+                const groupId = updateSubBtn.dataset.groupId;
+                 if (groupId && groupId !== 'all' && groupId !== 'healthy_configs') {
+                    handleUpdateGroupSubscription(groupId, true); // true to force update
+                }
+            } else if (groupItem) { // Click on the group item itself
                 handleGroupClick(e);
             }
         });
@@ -1403,6 +1552,94 @@ document.addEventListener('DOMContentLoaded', () => {
         // The provided index.html does not have: exportAllBtn, exportGroupBtn, addConfigFromClipboardBtn
         // exportSelectedBtn is now added.
         safelyAddEventListener('#exportSelectedBtn', 'click', handleExportSelectedConfigs);
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            const isCtrlOrCmd = e.ctrlKey || e.metaKey; // metaKey for macOS Command
+
+            if (isCtrlOrCmd && e.key.toLowerCase() === 't') {
+                e.preventDefault();
+                if (state.isTesting && !$('#stopTestBtn').disabled) {
+                    $('#stopTestBtn').click();
+                } else if (!state.isTesting && !$('#startTestBtn').disabled) {
+                    $('#startTestBtn').click();
+                }
+            } else if (isCtrlOrCmd && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                $('#openAddModalBtn').click();
+            } else if (isCtrlOrCmd && e.key.toLowerCase() === 'f') {
+                e.preventDefault();
+                $('#searchBox').focus();
+            } else if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedConfigIds.length > 0) {
+                 // Ensure focus is not on an input field when Delete/Backspace is pressed
+                const activeElement = document.activeElement;
+                if (activeElement.tagName !== 'INPUT' && activeElement.tagName !== 'TEXTAREA' && activeElement.contentEditable !== 'true') {
+                    e.preventDefault();
+                    handleDeleteConfig(); // This function already includes a confirmation
+                }
+            }
+        });
+
+        // Sidebar Resizer Logic
+        const sidebar = $('#sidebar');
+        const resizer = $('#resizer');
+        const mainContent = $('.main-content'); // Assuming this is the element to adjust
+
+        if (sidebar && resizer && mainContent) {
+            let isResizing = false;
+            let initialSidebarWidth = sidebar.offsetWidth;
+            let initialMouseX = 0;
+
+            // Load persisted sidebar width
+            if (state.settings.sidebarWidth) {
+                sidebar.style.width = `${state.settings.sidebarWidth}px`;
+            }
+
+
+            resizer.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                initialSidebarWidth = sidebar.offsetWidth;
+                initialMouseX = e.clientX;
+                sidebar.style.transition = 'none'; // Disable CSS transition during drag for smoothness
+                mainContent.style.transition = 'none'; // Disable for main content margin if it's animated
+
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+            });
+
+            const handleMouseMove = (e) => {
+                if (!isResizing) return;
+                const deltaX = e.clientX - initialMouseX;
+                let newWidth = initialSidebarWidth + deltaX;
+
+                const minWidth = parseInt(getComputedStyle(sidebar).minWidth, 10) || 150;
+                const maxWidth = window.innerWidth * 0.5; // Example: max 50% of window
+
+                if (newWidth < minWidth) newWidth = minWidth;
+                if (newWidth > maxWidth) newWidth = maxWidth;
+
+                sidebar.style.width = `${newWidth}px`;
+                // If main content margin is adjusted by sidebar width, update it here too.
+                // For example, if main content has margin-left equal to sidebar width:
+                // mainContent.style.marginLeft = `${newWidth}px`;
+            };
+
+            const handleMouseUp = () => {
+                if (!isResizing) return;
+                isResizing = false;
+                sidebar.style.transition = ''; // Re-enable CSS transition
+                mainContent.style.transition = '';
+
+                // Persist the new width
+                state.settings.sidebarWidth = sidebar.offsetWidth;
+                saveAllData(); // This should ideally only save settings, not all data
+
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+            };
+        } else {
+            console.warn("Sidebar, resizer, or main content element not found. Resizer disabled.");
+        }
     }
 
     // --- Handlers ---
@@ -1519,7 +1756,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Font size setting
         if (selectedFontSize && state.settings.fontSize !== selectedFontSize) {
-            applyFontSize(selectedFontSize); // This also updates state.settings.fontSize
+            applyFontSize(selectedFontSize);
             changed = true;
         }
         // Real Delay Test settings
@@ -1531,11 +1768,28 @@ document.addEventListener('DOMContentLoaded', () => {
             state.settings.realDelayTestPings = realDelayTestPings;
             changed = true;
         }
-        if (!isNaN(realDelayTestTimeout) && realDelayTestTimeout >= 100 && state.settings.realDelayTestTimeout !== realDelayTestTimeout) { // Ensure timeout is reasonable
+        if (!isNaN(realDelayTestTimeout) && realDelayTestTimeout >= 100 && state.settings.realDelayTestTimeout !== realDelayTestTimeout) {
             state.settings.realDelayTestTimeout = realDelayTestTimeout;
             changed = true;
         }
 
+        // Column Visibility settings
+        let columnVisibilityChanged = false;
+        columnDefinitions.forEach(col => {
+            const checkbox = $(`#col-toggle-${col.key}`);
+            if (checkbox) {
+                const isVisible = checkbox.checked;
+                if (state.settings.columnVisibility[col.key] !== isVisible) {
+                    state.settings.columnVisibility[col.key] = isVisible;
+                    columnVisibilityChanged = true;
+                }
+            }
+        });
+
+        if (columnVisibilityChanged) {
+            applyColumnVisibility(); // Apply immediately to update table
+            changed = true; // Ensure saveAllData is called
+        }
 
         if (changed) {
             saveAllData();
@@ -1682,11 +1936,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 addDetailToModal('detail_fingerprint', ts.fingerprint);
                 addDetailToModal('detail_allow_insecure', typeof ts.allowInsecure === 'boolean' ? ts.allowInsecure : undefined);
             }
-            if (details.streamSettings.realitySettings) { // Display REALITY settings if present
+            if (details.streamSettings.realitySettings) {
                 const rs = details.streamSettings.realitySettings;
                 addDetailToModal('detail_xtls_settings_publickey', rs.publicKey);
                 addDetailToModal('detail_xtls_settings_shortid', rs.shortId);
-                // serverName and fingerprint might be redundant if already shown in tlsSettings, but can be added if distinct
             }
             if (details.streamSettings.wsSettings) {
                 addDetailToModal('detail_ws_path', details.streamSettings.wsSettings.path);
@@ -1971,6 +2224,83 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         showContextMenu(e, menuItems);
     };
+
+    const handleManageGroupSubscription = async (groupId) => {
+        const group = state.groups.find(g => g.id === groupId);
+        if (!group) {
+            showToast(lang('toast_group_not_found_edit'), 'error'); // Re-use existing lang key
+            return;
+        }
+
+        const newSubUrl = await showPrompt({
+            title: lang('prompt_group_sub_url_title') || 'Group Subscription URL', // Add lang key
+            message: lang('prompt_group_sub_url_message') || 'Enter subscription URL (leave empty to remove):', // Add lang key
+            defaultValue: group.subscriptionUrl || ''
+        });
+
+        if (newSubUrl !== null) { // User didn't cancel prompt
+            const trimmedUrl = newSubUrl.trim();
+            if (trimmedUrl === '' && group.subscriptionUrl) { // Removing URL
+                delete group.subscriptionUrl;
+                delete group.lastUpdated; // Remove last updated time as well
+                showToast(lang('toast_group_sub_url_removed', { groupName: group.name }), 'success'); // Add lang key
+            } else if (trimmedUrl !== '' && trimmedUrl !== group.subscriptionUrl) {
+                try {
+                    new URL(trimmedUrl); // Validate URL format
+                    group.subscriptionUrl = trimmedUrl;
+                    group.lastUpdated = null; // Reset last updated time, will update on fetch
+                    showToast(lang('toast_group_sub_url_set', { groupName: group.name }), 'success'); // Add lang key
+                     // Optionally, ask if they want to update now
+                    const updateConfirm = await showConfirm({
+                        title: lang('confirm_update_sub_now_title') || 'Update Subscription', // Add lang key
+                        message: lang('confirm_update_sub_now_message', { groupName: group.name }) || `Subscription URL for group "${group.name}" has been set/changed. Update now?` // Add lang key
+                    });
+                    if (updateConfirm) {
+                        handleUpdateGroupSubscription(groupId);
+                    }
+                } catch (urlError) {
+                    showToast(lang('toast_invalid_sub_url'), 'error'); // Add lang key
+                }
+            }
+            saveAllData();
+            renderGroups(); // Re-render to show new/updated sub button title and update button
+        }
+    };
+
+    const handleUpdateGroupSubscription = async (groupId, forceUpdate = false) => {
+        const group = state.groups.find(g => g.id === groupId);
+        if (!group || !group.subscriptionUrl) {
+            showToast(lang('toast_no_sub_url_for_group', { groupName: group ? group.name : 'N/A' }), 'warning'); // Add lang key
+            return;
+        }
+
+        // Optional: Add logic here to prevent too frequent updates unless forced
+        // if (!forceUpdate && group.lastUpdated && (Date.now() - new Date(group.lastUpdated).getTime()) < SOME_MINIMUM_INTERVAL) {
+        //     showToast(lang('toast_sub_updated_recently', {groupName: group.name}), 'info'); // Add lang key
+        //     return;
+        // }
+
+        showToast(lang('toast_fetching_group_sub', { groupName: group.name }), 'info'); // Add lang key
+
+        try {
+            const result = await window.api.fetchSubscription(group.subscriptionUrl);
+            if (result.success) {
+                const links = result.data.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
+                // Modify processAndAddConfigs to accept a targetGroupId
+                await processAndAddConfigs(links, groupId); // Pass groupId here
+                group.lastUpdated = new Date().toISOString();
+                saveAllData(); // Save updated timestamp
+                renderGroups(); // Re-render groups to show updated lastUpdated time
+                // processAndAddConfigs already shows a toast for added configs
+            } else {
+                throw new Error(result.error || 'Unknown error fetching group subscription');
+            }
+        } catch (error) {
+            console.error(`Error fetching group subscription for ${group.name}:`, error);
+            showToast(lang('toast_failed_fetch_group_sub', { groupName: group.name, error: error.message }), 'error'); // Add lang key
+        }
+    };
+
 
     const handleSelectByStatusInGroup = (statusToSelect) => {
         const visibleConfigs = getVisibleConfigs(); // These are already filtered by current group/search
@@ -2371,13 +2701,29 @@ document.addEventListener('DOMContentLoaded', () => {
     window.api.onTestResult((result) => {
         const config = state.configs.find(c => c.id === result.id);
         if (config) {
-            config.delay = result.delay;
-            config.status = result.delay > -1 ? 'healthy' : (result.error ? 'error' : 'unhealthy');
-            if (result.error) config.errorMessage = result.error; else delete config.errorMessage;
+            if (result.testType === 'real-delay') {
+                config.realDelay = result.delay; // Store real delay separately
+                config.realDelayError = result.error || null;
+                // Note: We might not change the main 'status' based on real delay test alone,
+                // or we might define a combined status logic later. For now, it updates its own field.
+                // If realDelay is -1 and there's an error, it's an error for this test type.
+                // If it's > -1, it's a successful real delay test.
+            } else { // Standard test
+                config.delay = result.delay;
+                config.status = result.delay > -1 ? 'healthy' : (result.error ? 'error' : 'unhealthy');
+                if (result.error) config.errorMessage = result.error; else delete config.errorMessage;
+                // Clear real delay fields if a standard test is run, or decide on policy
+                // config.realDelay = undefined;
+                // config.realDelayError = undefined;
+            }
         }
-        renderTable();
+        renderTable(); // Update table (e.g. if a new column for real delay is added later)
         updateStatusBar();
         updateDashboardStatsInStatusBar();
+        // If the details panel is open and showing this config, refresh it
+        if (state.activeDetailConfigId === config.id && $('#configDetailsPanel').classList.contains('open')) {
+            showDetailsPanel(config.id, true); // Add a flag to indicate it's a refresh
+        }
     });
 
     window.api.onTestProgress(({ progress, total, completed }) => {

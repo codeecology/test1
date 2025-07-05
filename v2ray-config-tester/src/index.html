@@ -107,7 +107,16 @@
             </div>
         </main>
 
-        <!-- Config Details Panel REMOVED -->
+        <!-- FEATURE: Config Details Panel (Re-introduced) -->
+        <aside class="config-details-panel" id="configDetailsPanel">
+            <div class="panel-header">
+                <h3><i class="fa-solid fa-clipboard-list"></i> <span data-lang="config_details_title">جزئیات کانفیگ</span></h3>
+                <button id="closeDetailsPanelBtn" class="icon-btn" title="بستن پنل جزئیات">&times;</button>
+            </div>
+            <div class="panel-body" id="configDetailsBody">
+                <p class="empty-state" data-lang="select_config_to_view_details">یک کانفیگ را برای مشاهده جزئیات انتخاب کنید.</p>
+            </div>
+        </aside>
     </div>
 
     <!-- Modals container -->
@@ -155,6 +164,11 @@
                  <div class="form-group">
                     <label for="realDelayTestTimeoutInput" data-lang="setting_real_delay_timeout">زمان انتظار پینگ (میلی‌ثانیه)</label>
                     <input type="number" id="realDelayTestTimeoutInput" value="2000" min="500" step="100">
+                </div>
+                <hr>
+                <h4 data-lang="settings_column_visibility_title">نمایش ستون‌ها</h4>
+                <div id="columnVisibilitySettings" class="form-group column-visibility-grid">
+                    <!-- Checkboxes will be populated by JS -->
                 </div>
                 <hr>
                 <h4>مدیریت داده‌ها</h4>

@@ -753,6 +753,30 @@ tbody tr.connected:hover {
     font-weight: 500;
 }
 
+.column-visibility-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Responsive grid */
+    gap: 0.8rem;
+}
+.column-visibility-grid .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: var(--bg-tertiary-color);
+    padding: 0.5rem 0.8rem;
+    border-radius: 6px;
+}
+.column-visibility-grid input[type="checkbox"] {
+    width: 16px; /* Adjust size as needed */
+    height: 16px;
+    accent-color: var(--accent-color); /* Modern way to color checkboxes */
+}
+.column-visibility-grid label {
+    font-size: 0.9em;
+    color: var(--text-color);
+    cursor: pointer;
+}
+
 
 .modal-header {
     padding: 1.25rem 1.5rem; /* More padding */

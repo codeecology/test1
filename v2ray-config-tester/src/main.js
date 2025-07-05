@@ -361,27 +361,127 @@ function stopAllTests() {
     mainWindow.webContents.send('test:finish');
 }
 
-// IPC Handler for Real Delay Test (Phase 1: Basic Structure)
-ipcMain.on('test:real-delay', (event, { configs, settings }) => {
-    // const { realDelayTestUrl, realDelayTestPings, realDelayTestTimeout } = settings; // These will be from the global settings
+// IPC Handler for Real Delay Test (Phase 2 - Network Logic)
+ipcMain.on('test:real-delay', async (event, { configs, settings }) => {
     if (isDev) {
         console.log(`[Main] Received 'test:real-delay' for ${configs.length} configs.`);
         console.log('[Main] Real Delay Test Settings:', settings.realDelayTestUrl, settings.realDelayTestPings, settings.realDelayTestTimeout);
     }
-    // TODO: Implement actual real delay testing logic here in Phase 2.
-    // For now, just acknowledge. Maybe send a completion event after a mock delay.
-    setTimeout(() => {
-        // Mock results for now
-        configs.forEach(config => {
-            mainWindow.webContents.send('test:result', { // Can reuse 'test:result' or create a new event like 'test:real-delay-result'
-                id: config.id,
-                delay: Math.random() > 0.3 ? Math.floor(Math.random() * 1000) + 50 : -1, // Mock some failures
-                testType: 'real-delay' // Add a type to distinguish if needed
+
+    const { realDelayTestUrl, realDelayTestPings, realDelayTestTimeout } = settings;
+    let completedCount = 0;
+    let activeRealDelayTestProcesses = new Map(); // Similar to standard test
+
+    const runSingleRealDelayTest = async (config) => {
+        const testPort = 20000 + Math.floor(Math.random() * 40000); // Use a different port range to avoid conflict
+        const genConfigResponse = generateTempConfig(config.link, testPort);
+
+        if (!genConfigResponse.success) {
+            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: genConfigResponse.error, testType: 'real-delay' });
+            completedCount++;
+            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
+            activeRealDelayTestProcesses.delete(config.id);
+            return;
+        }
+        const configPath = genConfigResponse.path;
+        let xrayProcess;
+
+        try {
+            xrayProcess = spawn(xrayPath, ['run', '-c', configPath]);
+            activeRealDelayTestProcesses.set(config.id, xrayProcess);
+
+            xrayProcess.on('error', (spawnError) => {
+                console.error(`Failed to start Xray for real delay test (config ${config.id}):`, spawnError);
+                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: `Xray start error: ${spawnError.message}`, testType: 'real-delay' });
+                return;
             });
-        });
-        mainWindow.webContents.send('test:finish'); // Signal completion
-        if(isDev) console.log("[Main] Mock Real Delay Test finished.");
-    }, 2000); // Mock 2 second test duration
+
+            // Wait for Xray to signal it has started (similar to standard test)
+            const xrayStartTimeoutMs = settings.testTimeout > 5 ? (settings.testTimeout * 1000 / 2) : 5000; // Reuse standard test timeout for Xray startup
+            try {
+                await new Promise((resolve, reject) => {
+                    const timeoutId = setTimeout(() => reject(new Error('Xray startup timeout for real delay test')), xrayStartTimeoutMs);
+                    let outputBuffer = '';
+                    const onData = (data) => {
+                        outputBuffer += data.toString();
+                        if (/Xray.*started/i.test(outputBuffer)) {
+                            clearTimeout(timeoutId);
+                            xrayProcess.stdout.removeListener('data', onData);
+                            resolve();
+                        }
+                    };
+                    xrayProcess.stdout.on('data', onData);
+                    xrayProcess.once('exit', (code, signal) => {
+                        clearTimeout(timeoutId);
+                        xrayProcess.stdout.removeListener('data', onData);
+                        reject(new Error(`Xray exited prematurely (real delay test) with code ${code}, signal ${signal}`));
+                    });
+                });
+            } catch (startupError) {
+                console.error(`Xray startup error for real delay test (config ${config.id}):`, startupError.message);
+                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: startupError.message, testType: 'real-delay' });
+                return; // Handled in finally
+            }
+
+            const agent = new SocksProxyAgent(`socks5://127.0.0.1:${testPort}`);
+            let totalDelay = 0;
+            let successfulPings = 0;
+            let firstError = null;
+
+            for (let i = 0; i < realDelayTestPings; i++) {
+                const startTime = Date.now();
+                try {
+                    // Using HEAD request to minimize data transfer, focusing on connection + server response time
+                    await axios.head(realDelayTestUrl, { httpAgent: agent, httpsAgent: agent, timeout: realDelayTestTimeout });
+                    totalDelay += (Date.now() - startTime);
+                    successfulPings++;
+                } catch (pingError) {
+                    if (isDev) console.warn(`Real delay ping ${i + 1} failed for ${config.name}: ${pingError.message}`);
+                    if (!firstError) firstError = pingError.message || 'Ping failed';
+                    // Optionally break here or continue trying all pings
+                    // break;
+                }
+                if (i < realDelayTestPings - 1) await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between pings
+            }
+
+            if (successfulPings > 0) {
+                const averageDelay = Math.round(totalDelay / successfulPings);
+                mainWindow.webContents.send('test:result', { id: config.id, delay: averageDelay, testType: 'real-delay' });
+            } else {
+                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: firstError || 'All pings failed', testType: 'real-delay' });
+            }
+
+        } catch (error) { // Catch errors from the outer try (e.g. Xray startup promise rejection)
+            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: error.message || 'General error in real delay test', testType: 'real-delay' });
+        } finally {
+            if (xrayProcess && !xrayProcess.killed) {
+                xrayProcess.kill();
+            }
+            if (configPath) {
+                fs.unlink(configPath, (err) => {
+                    if (err) console.error(`Failed to delete temp config for real delay test '${configPath}':`, err);
+                });
+            }
+            activeRealDelayTestProcesses.delete(config.id);
+            completedCount++;
+            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
+            if (completedCount === configs.length) {
+                mainWindow.webContents.send('test:finish');
+                if(isDev) console.log("[Main] Real Delay Test sequence finished.");
+            }
+        }
+    };
+
+    // Basic sequential execution for now. Could be pooled like standard tests.
+    (async () => {
+        for (const config of configs) {
+            // Check if testing has been stopped (e.g., by user action)
+            // This requires a global flag or a way to check activeTestProcesses size,
+            // but this IPC handler runs to completion for the batch.
+            // For simplicity in Phase 2, we run all configs passed in the batch.
+            await runSingleRealDelayTest(config);
+        }
+    })();
 });
 
 // --- System Proxy & Connection Management ---
