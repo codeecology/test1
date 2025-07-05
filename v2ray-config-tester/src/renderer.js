@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchTerm: '',
         currentLanguage: 'fa',
         currentTheme: 'dark-theme',
-        // activeDetailConfigId: null, // No longer needed for panel
+        activeDetailConfigId: null, // Re-add for the panel
         lastTestCompletionTime: null,
     };
 
@@ -181,10 +181,22 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_no_configs_selected_test: "No configurations selected for testing.",
             toast_selected_exported_success: "{count} selected config(s) exported successfully.",
             toast_export_failed: "Export failed: {error}",
+            // Speed Test Settings
+            setting_speed_test_url: "Download Speed Test File URL",
+            setting_speed_test_url_note: "Use a file of known size (e.g., 1MB, 5MB, 10MB).",
+            speed_test_selected_ctx: "Speed Test ({count})",
+            // Test History
+            test_history_title: "Test History",
+            no_test_history_for_config: "No test history for this config.",
+            test_type_standard: "Standard",
+            test_type_real_delay: "Real Delay",
+            test_type_speed: "Speed",
             // Detail panel specific
             error_message_detail: "Error Message",
             real_delay_avg_detail: "Real Delay (Avg)",
             real_delay_error_detail: "Real Delay Error",
+            download_speed_detail: "Download Speed",
+            speed_test_error_detail: "Speed Test Error",
             // Group Subscriptions
             prompt_group_sub_url_title: "Group Subscription URL",
             prompt_group_sub_url_message: "Enter subscription URL (leave empty to remove):",
@@ -355,10 +367,22 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_no_configs_selected_test: "هیچ کانفیگی برای تست انتخاب نشده است.",
             toast_selected_exported_success: "{count} کانفیگ منتخب با موفقیت صادر شد.",
             toast_export_failed: "خطا در صدور: {error}",
+            // Speed Test Settings - Farsi
+            setting_speed_test_url: "آدرس فایل تست سرعت دانلود",
+            setting_speed_test_url_note: "از یک فایل با حجم معین استفاده کنید (مثلا 1MB، 5MB، 10MB).",
+            speed_test_selected_ctx: "تست سرعت ({count})",
+            // Test History - Farsi
+            test_history_title: "تاریخچه تست‌ها",
+            no_test_history_for_config: "تاریخچه تستی برای این کانفیگ وجود ندارد.",
+            test_type_standard: "استاندارد",
+            test_type_real_delay: "تأخیر واقعی",
+            test_type_speed: "سرعت",
             // Detail panel specific - Farsi
             error_message_detail: "پیام خطا",
             real_delay_avg_detail: "تأخیر واقعی (میانگین)",
             real_delay_error_detail: "خطای تأخیر واقعی",
+            download_speed_detail: "سرعت دانلود",
+            speed_test_error_detail: "خطای تست سرعت",
             // Group Subscriptions - Farsi
             prompt_group_sub_url_title: "آدرس URL اشتراک گروه",
             prompt_group_sub_url_message: "آدرس URL اشتراک را وارد کنید (برای حذف خالی بگذارید):",
@@ -461,27 +485,46 @@ document.addEventListener('DOMContentLoaded', () => {
         state.settings.fontSize = size; // Keep track of current setting
     };
 
-    const columnDefinitions = [
-        // Checkbox column is always visible, not part of this setting
-        { key: 'status', langKey: 'status', defaultVisible: true, index: 1 },
-        { key: 'name', langKey: 'name', defaultVisible: true, index: 2 },
-        { key: 'country', langKey: 'country', defaultVisible: true, index: 3 },
-        { key: 'delay', langKey: 'delay', defaultVisible: true, index: 4 },
-        { key: 'protocol', langKey: 'protocol', defaultVisible: true, index: 5 },
-        { key: 'network', langKey: 'network', defaultVisible: true, index: 6 },
-        { key: 'port', langKey: 'port', defaultVisible: true, index: 7 },
-        { key: 'details', langKey: 'details', defaultVisible: true, index: 8 }
-    ];
+    // Define columns with their properties. `index` here is the original, fixed index if not reordered.
+    // The actual display order will be managed by `state.settings.columnOrder`.
+    // The checkbox (index 0) and actions (if any, index N) are typically fixed and not part of this reorderable set.
+    const columnDefinitions = { // Changed to an object for easier lookup by key
+        status:  { langKey: 'status', defaultVisible: true, defaultOrder: 0 },
+        name:    { langKey: 'name', defaultVisible: true, defaultOrder: 1 },
+        country: { langKey: 'country', defaultVisible: true, defaultOrder: 2 },
+        delay:   { langKey: 'delay', defaultVisible: true, defaultOrder: 3 },
+        protocol:{ langKey: 'protocol', defaultVisible: true, defaultOrder: 4 },
+        network: { langKey: 'network', defaultVisible: true, defaultOrder: 5 },
+        port:    { langKey: 'port', defaultVisible: true, defaultOrder: 6 },
+        details: { langKey: 'details', defaultVisible: true, defaultOrder: 7 }
+    };
+    // This will be an array of keys, e.g., ['status', 'name', 'country', ...]
+    const defaultColumnOrder = Object.keys(columnDefinitions).sort((a, b) => columnDefinitions[a].defaultOrder - columnDefinitions[b].defaultOrder);
 
-    const initializeColumnVisibility = () => {
+    const initializeColumnSettings = () => {
         if (!state.settings.columnVisibility) {
             state.settings.columnVisibility = {};
         }
-        columnDefinitions.forEach(col => {
-            if (state.settings.columnVisibility[col.key] === undefined) {
-                state.settings.columnVisibility[col.key] = col.defaultVisible;
+        Object.keys(columnDefinitions).forEach(key => {
+            if (state.settings.columnVisibility[key] === undefined) {
+                state.settings.columnVisibility[key] = columnDefinitions[key].defaultVisible;
             }
         });
+
+        if (!state.settings.columnOrder || !Array.isArray(state.settings.columnOrder) || state.settings.columnOrder.length !== defaultColumnOrder.length) {
+            state.settings.columnOrder = [...defaultColumnOrder];
+        }
+        // Ensure all keys in columnOrder exist in columnDefinitions and vice-versa (for robustness if definitions change)
+        const currentKeys = Object.keys(columnDefinitions);
+        state.settings.columnOrder = state.settings.columnOrder.filter(key => currentKeys.includes(key));
+        currentKeys.forEach(key => {
+            if (!state.settings.columnOrder.includes(key)) {
+                // Add missing keys at the end, respecting their defaultOrder if possible, or just append
+                // This part can be complex if defaultOrder needs strict re-insertion. For now, just append.
+                state.settings.columnOrder.push(key);
+            }
+        });
+
     };
 
     const populateColumnVisibilitySettings = () => {
@@ -1096,6 +1139,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const realDelayTestTimeoutInput = $('#realDelayTestTimeoutInput');
             if (realDelayTestTimeoutInput) realDelayTestTimeoutInput.value = state.settings.realDelayTestTimeout || 2000; else console.warn('#realDelayTestTimeoutInput not found');
 
+            const speedTestFileUrlInput = $('#speedTestFileUrlInput');
+            if (speedTestFileUrlInput) speedTestFileUrlInput.value = state.settings.speedTestFileUrl || 'http://cachefly.cachefly.net/10mb.test'; else console.warn('#speedTestFileUrlInput not found');
+
             // Populate Column Visibility settings
             populateColumnVisibilitySettings();
 
@@ -1413,8 +1459,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // Config Details Panel related event listener REMOVED
-        // safelyAddEventListener('#closeDetailsPanelBtn', 'click', closeDetailsPanel);
+        // Config Details Panel
+        safelyAddEventListener('#closeDetailsPanelBtn', 'click', closeDetailsPanel);
+
 
         // Toolbar buttons
         safelyAddEventListener('#openAddModalBtn', 'click', () => openModal('addConfigModal'));
@@ -1739,6 +1786,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const realDelayTestUrl = $('#realDelayTestUrlInput').value;
         const realDelayTestPings = parseInt($('#realDelayTestPingsInput').value, 10);
         const realDelayTestTimeout = parseInt($('#realDelayTestTimeoutInput').value, 10);
+        const speedTestFileUrl = $('#speedTestFileUrlInput').value;
 
         let changed = false;
         // Standard test settings
@@ -1770,6 +1818,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (!isNaN(realDelayTestTimeout) && realDelayTestTimeout >= 100 && state.settings.realDelayTestTimeout !== realDelayTestTimeout) {
             state.settings.realDelayTestTimeout = realDelayTestTimeout;
+            changed = true;
+        }
+        if (speedTestFileUrl && state.settings.speedTestFileUrl !== speedTestFileUrl) {
+            state.settings.speedTestFileUrl = speedTestFileUrl;
             changed = true;
         }
 
@@ -1847,46 +1899,80 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSelectAllCheckboxState();
     // Also call it after handleSearch, handleGroupClick, handleDeleteConfig, etc.
 
-    const showConfigDetailsModal = async (configLink) => {
-        const modalBody = $('#configDetailModalBody');
-        if (!modalBody) {
-            console.error("#configDetailModalBody not found");
+    // --- Config Details Panel Logic (Re-introduced) ---
+    const showDetailsPanel = async (configId, isRefresh = false) => {
+        const panel = $('#configDetailsPanel');
+        const panelBody = $('#configDetailsBody');
+
+        if (!panel || !panelBody) {
+            console.error("Details panel elements not found.");
             return;
         }
-        modalBody.innerHTML = `<p class="empty-state" data-lang="loading_details">${lang('loading_details')}</p>`;
-        openModal('configDetailModal');
+
+        if (!isRefresh && state.activeDetailConfigId === configId && panel.classList.contains('open')) {
+            closeDetailsPanel(); // Toggle if already open for the same config and not a refresh
+            return;
+        }
+
+        const config = state.configs.find(c => c.id === configId);
+        if (!config) {
+            showToast(lang('error_config_not_found'), 'error');
+            closeDetailsPanel(); // Close if config somehow not found
+            return;
+        }
+
+        panelBody.innerHTML = `<p class="empty-state" data-lang="loading_details">${lang('loading_details')}</p>`;
+        if (!panel.classList.contains('open')) {
+            panel.classList.add('open');
+        }
+        state.activeDetailConfigId = configId;
 
         try {
-            const result = await window.api.getFullConfigDetails(configLink);
-            const originalConfig = state.configs.find(c => c.link === configLink); // Get original for name, etc.
-
-            if (result.success && originalConfig) {
-                populateConfigDetailModalBody(modalBody, result.details, originalConfig);
+            const result = await window.api.getFullConfigDetails(config.link);
+            if (result.success) {
+                populateDetailsPanel(result.details, config);
             } else {
-                throw new Error(result.error || 'Config details or original config not found.');
+                throw new Error(result.error || 'Failed to get config details.');
             }
         } catch (error) {
-            console.error("Error fetching/populating config details modal:", error);
-            modalBody.innerHTML = `<p class="empty-state error-state">${lang('error_fetching_details')}: ${error.message}</p>`;
+            console.error("Error fetching/populating config details panel:", error);
+            panelBody.innerHTML = `<p class="empty-state error-state">${lang('error_fetching_details')}: ${error.message}</p>`;
         }
     };
 
-    const populateConfigDetailModalBody = (modalBody, details, originalConfig) => {
-        modalBody.innerHTML = ''; // Clear loading/previous state
+    const closeDetailsPanel = () => {
+        const panel = $('#configDetailsPanel');
+        if (panel) {
+            panel.classList.remove('open');
+        }
+        state.activeDetailConfigId = null;
+        // Reset to placeholder after animation (optional, but good practice)
+        setTimeout(() => {
+            const panelBody = $('#configDetailsBody');
+            if (panelBody && !panel.classList.contains('open')) {
+                 panelBody.innerHTML = `<p class="empty-state" data-lang="select_config_to_view_details">${lang('select_config_to_view_details')}</p>`;
+            }
+        }, 300); // Should match CSS transition duration
+    };
 
-        const addDetailToModal = (labelKey, value, isLong = false) => {
+    const populateDetailsPanel = (details, originalConfig) => {
+        const panelBody = $('#configDetailsBody');
+        if (!panelBody) return;
+        panelBody.innerHTML = ''; // Clear previous content
+
+        const addDetail = (labelKey, value, isLong = false) => { // Renamed from addDetailToModal to addDetail
             if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
                 return;
             }
             const item = document.createElement('div');
-            item.className = 'detail-item-modal'; // Use a different class if styling needs to differ from old panel
+            item.className = 'detail-item'; // Use original panel class names
 
             const label = document.createElement('div');
-            label.className = 'detail-label-modal';
+            label.className = 'detail-label';
             label.textContent = lang(labelKey) || labelKey.replace(/_/g, ' ');
 
             const valueDiv = document.createElement('div');
-            valueDiv.className = 'detail-value-modal';
+            valueDiv.className = 'detail-value';
             if (typeof value === 'boolean') {
                 valueDiv.textContent = value ? lang('yes') : lang('no');
             } else if (Array.isArray(value)) {
@@ -1902,57 +1988,129 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // Re-use the detail keys from translations
-        addDetailToModal('detail_name', originalConfig.name);
-        addDetailToModal('detail_protocol', details.protocol);
-        addDetailToModal('detail_address', originalConfig.address); // originalConfig.address should be accurate now
-        addDetailToModal('detail_port', originalConfig.portToDisplay); // originalConfig.portToDisplay should be accurate
+        addDetail('detail_name', originalConfig.name);
+        addDetail('detail_protocol', details.protocol);
+        addDetail('detail_address', originalConfig.address);
+        addDetail('detail_port', originalConfig.portToDisplay);
 
         if (details.settings) {
             if (details.protocol === 'vless' && details.settings.vnext?.[0]?.users?.[0]) {
                 const user = details.settings.vnext[0].users[0];
-                addDetailToModal('detail_id_user', user.id);
-                addDetailToModal('detail_encryption', user.encryption);
-                addDetailToModal('detail_flow', user.flow);
+                addDetail('detail_id_user', user.id);
+                addDetail('detail_encryption', user.encryption);
+                addDetail('detail_flow', user.flow);
             } else if (details.protocol === 'vmess' && details.settings.vnext?.[0]?.users?.[0]) {
                 const user = details.settings.vnext[0].users[0];
-                addDetailToModal('detail_id_user', user.id);
-                addDetailToModal('detail_alter_id', user.alterId);
-                addDetailToModal('detail_security_vmess', user.security);
+                addDetail('detail_id_user', user.id);
+                addDetail('detail_alter_id', user.alterId);
+                addDetail('detail_security_vmess', user.security);
             } else if (details.protocol === 'trojan' && details.settings.servers?.[0]) {
-                addDetailToModal('detail_password', details.settings.servers[0].password);
+                addDetail('detail_password', details.settings.servers[0].password);
             } else if (details.protocol === 'ss' && details.settings.servers?.[0]) {
-                addDetailToModal('detail_ss_method', details.settings.servers[0].method);
-                addDetailToModal('detail_password', details.settings.servers[0].password);
+                addDetail('detail_ss_method', details.settings.servers[0].method);
+                addDetail('detail_password', details.settings.servers[0].password);
             }
         }
 
         if (details.streamSettings) {
-            addDetailToModal('detail_network', details.streamSettings.network);
-            addDetailToModal('detail_security', details.streamSettings.security);
+            addDetail('detail_network', details.streamSettings.network);
+            addDetail('detail_security', details.streamSettings.security);
             if (details.streamSettings.tlsSettings) {
                 const ts = details.streamSettings.tlsSettings;
-                addDetailToModal('detail_sni', ts.serverName);
-                addDetailToModal('detail_alpn', ts.alpn);
-                addDetailToModal('detail_fingerprint', ts.fingerprint);
-                addDetailToModal('detail_allow_insecure', typeof ts.allowInsecure === 'boolean' ? ts.allowInsecure : undefined);
+                addDetail('detail_sni', ts.serverName);
+                addDetail('detail_alpn', ts.alpn);
+                addDetail('detail_fingerprint', ts.fingerprint);
+                addDetail('detail_allow_insecure', typeof ts.allowInsecure === 'boolean' ? ts.allowInsecure : undefined);
             }
             if (details.streamSettings.realitySettings) {
                 const rs = details.streamSettings.realitySettings;
-                addDetailToModal('detail_xtls_settings_publickey', rs.publicKey);
-                addDetailToModal('detail_xtls_settings_shortid', rs.shortId);
+                addDetail('detail_xtls_settings_publickey', rs.publicKey);
+                addDetail('detail_xtls_settings_shortid', rs.shortId);
             }
             if (details.streamSettings.wsSettings) {
-                addDetailToModal('detail_ws_path', details.streamSettings.wsSettings.path);
-                if(details.streamSettings.wsSettings.headers) addDetailToModal('detail_ws_host', details.streamSettings.wsSettings.headers.Host);
+                addDetail('detail_ws_path', details.streamSettings.wsSettings.path);
+                if(details.streamSettings.wsSettings.headers) addDetail('detail_ws_host', details.streamSettings.wsSettings.headers.Host);
             }
             if (details.streamSettings.grpcSettings) {
-                addDetailToModal('detail_service_name', details.streamSettings.grpcSettings.serviceName);
-                addDetailToModal('detail_multi_mode', typeof details.streamSettings.grpcSettings.multiMode === 'boolean' ? details.streamSettings.grpcSettings.multiMode : undefined);
+                addDetail('detail_service_name', details.streamSettings.grpcSettings.serviceName);
+                addDetail('detail_multi_mode', typeof details.streamSettings.grpcSettings.multiMode === 'boolean' ? details.streamSettings.grpcSettings.multiMode : undefined);
             }
-            // Add KCP, QUIC etc. if needed
         }
-        addDetailToModal('detail_full_link', originalConfig.link, true);
+        addDetail('detail_full_link', originalConfig.link, true);
+
+        // Standard test results
+        addDetail('status', formatStatus(originalConfig.status));
+        if (originalConfig.delay !== null && originalConfig.delay !== undefined) {
+            addDetail('delay', formatDelay(originalConfig.delay));
+        }
+        if (originalConfig.errorMessage) {
+            addDetail('error_message_detail', originalConfig.errorMessage, true);
+        }
+
+        // Real Delay Test results
+        if (originalConfig.realDelay !== undefined && originalConfig.realDelay !== null) {
+            addDetail('real_delay_avg_detail', formatDelay(originalConfig.realDelay));
+            if (originalConfig.realDelayError) {
+                addDetail('real_delay_error_detail', originalConfig.realDelayError, true);
+            }
+        } else if (originalConfig.realDelayError) {
+             addDetail('real_delay_avg_detail', 'N/A');
+             addDetail('real_delay_error_detail', originalConfig.realDelayError, true);
+        }
+
+        // Add Speed Test results if available
+        if (originalConfig.downloadSpeed !== undefined && originalConfig.downloadSpeed !== null) {
+            if (originalConfig.downloadSpeed > -1) {
+                addDetail('download_speed_detail', `${originalConfig.downloadSpeed} Mbps`);
+            } else {
+                addDetail('download_speed_detail', 'N/A');
+            }
+            if (originalConfig.speedTestError) {
+                addDetail('speed_test_error_detail', originalConfig.speedTestError, true);
+            }
+        } else if (originalConfig.speedTestError) {
+            addDetail('download_speed_detail', 'N/A');
+            addDetail('speed_test_error_detail', originalConfig.speedTestError, true);
+        }
+
+        // Add Test History section
+        const historyTitle = document.createElement('h4');
+        historyTitle.className = 'detail-section-title'; // For styling
+        historyTitle.textContent = lang('test_history_title') || 'Test History'; // Add lang key
+        panelBody.appendChild(historyTitle);
+
+        const historyList = document.createElement('ul');
+        historyList.className = 'test-history-list'; // For styling
+
+        const configHistory = (state.settings.testHistory || []).filter(entry => entry.configId === originalConfig.id).slice(0, 5); // Show last 5 for this config
+
+        if (configHistory.length === 0) {
+            const noHistoryItem = document.createElement('li');
+            noHistoryItem.className = 'history-item empty';
+            noHistoryItem.textContent = lang('no_test_history_for_config') || 'No test history for this config.'; // Add lang key
+            historyList.appendChild(noHistoryItem);
+        } else {
+            configHistory.forEach(entry => {
+                const item = document.createElement('li');
+                item.className = 'history-item';
+                const date = new Date(entry.timestamp).toLocaleString();
+                let resultText = '';
+                if (entry.testType === 'speed') {
+                    resultText = entry.downloadSpeed > -1 ? `${entry.downloadSpeed} Mbps` : `Error: ${entry.error || 'Failed'}`;
+                } else { // standard or real-delay
+                    resultText = entry.delay > -1 ? `${entry.delay} ms` : `Error: ${entry.error || 'Failed'}`;
+                }
+                item.innerHTML = `
+                    <span class="history-date">${date}</span>
+                    <span class="history-type">(${lang('test_type_' + entry.testType) || entry.testType})</span>:
+                    <span class="history-result">${resultText}</span>
+                `; // Add lang key: test_type_standard, test_type_real-delay, test_type_speed
+                historyList.appendChild(item);
+            });
+        }
+        panelBody.appendChild(historyList);
     };
+    // --- End Config Details Panel Logic ---
 
 
     const handleAddConfigFromText = () => {
@@ -2582,12 +2740,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Standard actions for single selection
         if (state.selectedConfigIds.length === 1 && selectedConfig) {
-            items.push({
-                label: lang('view_details_ctx') || "View Details", // Add lang key: view_details_ctx
-                action: () => showConfigDetailsModal(selectedConfig.link),
-                iconClass: 'fa-solid fa-circle-info'
-            });
-            items.push({ type: 'separator' });
+            // "View Details" is now done by clicking the row, so it's not needed in context menu.
+            // If we want it back, it should call showDetailsPanel(selectedConfig.id)
+            // items.push({
+            //     label: lang('view_details_ctx') || "View Details",
+            //     action: () => showDetailsPanel(selectedConfig.id),
+            //     iconClass: 'fa-solid fa-circle-info'
+            // });
+            // items.push({ type: 'separator' });
             items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(selectedConfig.link).then(() => showToast(lang('toast_link_copied'), 'success')).catch(e => showToast(lang('toast_failed_copy_link'), 'error')), iconClass: 'fa-solid fa-copy' });
             items.push({ label: lang('show_qr_code'), action: () => handleShowQRCode(selectedConfig.link), iconClass: 'fa-solid fa-qrcode' });
             items.push({ label: lang('edit_name'), action: () => handleEditName(selectedConfig), iconClass: 'fa-solid fa-pen-to-square' });
@@ -2638,7 +2798,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     window.api.startRealDelayTests({ configs: configsToTest, settings: state.settings });
                 },
-                iconClass: 'fa-solid fa-stopwatch' // Different icon
+                iconClass: 'fa-solid fa-stopwatch'
+            });
+            // Add Speed Test option
+            items.push({
+                label: `${lang('speed_test_selected_ctx', { count: state.selectedConfigIds.length })}`, // Add lang key
+                action: () => {
+                    if (state.isTesting) {
+                        showToast(lang('toast_test_already_running'), 'warning');
+                        return;
+                    }
+                    const configsToTest = state.configs.filter(c => state.selectedConfigIds.includes(c.id));
+                    if (configsToTest.length === 0) {
+                        showToast(lang('toast_no_configs_selected_test'), 'warning');
+                        return;
+                    }
+                    state.isTesting = true;
+                    configsToTest.forEach(c => c.status = 'testing'); // Or 'speed_testing'
+                    renderTable();
+                    updateTestUI();
+                    $('#progressBar').style.width = '0%';
+                    $('#progressText').textContent = `Speed Testing 0/${configsToTest.length}`; // TODO: Localize
+                    window.api.startSpeedTests({ configs: configsToTest, settings: state.settings });
+                },
+                iconClass: 'fa-solid fa-gauge-high'
             });
         }
 
@@ -2702,27 +2885,44 @@ document.addEventListener('DOMContentLoaded', () => {
         const config = state.configs.find(c => c.id === result.id);
         if (config) {
             if (result.testType === 'real-delay') {
-                config.realDelay = result.delay; // Store real delay separately
+                config.realDelay = result.delay;
                 config.realDelayError = result.error || null;
-                // Note: We might not change the main 'status' based on real delay test alone,
-                // or we might define a combined status logic later. For now, it updates its own field.
-                // If realDelay is -1 and there's an error, it's an error for this test type.
-                // If it's > -1, it's a successful real delay test.
-            } else { // Standard test
+            } else if (result.testType === 'speed') {
+                config.downloadSpeed = result.downloadSpeed;
+                config.speedTestError = result.error || null;
+            } else { // Standard test (connectivity)
                 config.delay = result.delay;
                 config.status = result.delay > -1 ? 'healthy' : (result.error ? 'error' : 'unhealthy');
                 if (result.error) config.errorMessage = result.error; else delete config.errorMessage;
-                // Clear real delay fields if a standard test is run, or decide on policy
-                // config.realDelay = undefined;
-                // config.realDelayError = undefined;
             }
+
+            // Add to test history
+            if (!state.settings.testHistory) {
+                state.settings.testHistory = [];
+            }
+            const historyEntry = {
+                configId: config.id,
+                configName: config.name, // Store name at time of test for context
+                timestamp: new Date().toISOString(),
+                testType: result.testType || 'standard', // Default to 'standard' if not specified
+                delay: result.testType !== 'speed' ? result.delay : undefined, // delay for standard/real-delay
+                downloadSpeed: result.testType === 'speed' ? result.downloadSpeed : undefined, // speed for speed test
+                status: result.testType !== 'speed' ? (result.delay > -1 ? 'healthy' : (result.error ? 'error' : 'unhealthy')) : (result.downloadSpeed > -1 ? 'success' : 'error'), // Simplified status for history
+                error: result.error || null,
+            };
+            state.settings.testHistory.unshift(historyEntry); // Add to the beginning
+            const MAX_HISTORY_ITEMS = 100; // Limit global history size
+            if (state.settings.testHistory.length > MAX_HISTORY_ITEMS) {
+                state.settings.testHistory.length = MAX_HISTORY_ITEMS; // Trim older entries
+            }
+            saveAllData(); // Save settings which now includes history
         }
-        renderTable(); // Update table (e.g. if a new column for real delay is added later)
+        renderTable();
         updateStatusBar();
         updateDashboardStatsInStatusBar();
-        // If the details panel is open and showing this config, refresh it
-        if (state.activeDetailConfigId === config.id && $('#configDetailsPanel').classList.contains('open')) {
-            showDetailsPanel(config.id, true); // Add a flag to indicate it's a refresh
+
+        if (config && state.activeDetailConfigId === config.id && $('#configDetailsPanel').classList.contains('open')) {
+            showDetailsPanel(config.id, true);
         }
     });
 

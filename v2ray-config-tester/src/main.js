@@ -484,6 +484,124 @@ ipcMain.on('test:real-delay', async (event, { configs, settings }) => {
     })();
 });
 
+// IPC Handler for Speed Test (Phase 1 - Basic Structure)
+ipcMain.on('test:speed', async (event, { configs, settings }) => {
+    if (isDev) {
+        console.log(`[Main] Received 'test:speed' for ${configs.length} configs.`);
+        console.log('[Main] Speed Test Settings:', settings.speedTestFileUrl);
+    }
+    const { speedTestFileUrl } = settings;
+    let completedCount = 0;
+    let activeSpeedTestProcesses = new Map();
+
+    const runSingleSpeedTest = async (config) => {
+        const testPort = 30000 + Math.floor(Math.random() * 30000); // Yet another port range
+        const genConfigResponse = generateTempConfig(config.link, testPort);
+
+        if (!genConfigResponse.success) {
+            mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: genConfigResponse.error, testType: 'speed' });
+            // ... (progress update logic, similar to real-delay)
+            completedCount++;
+            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
+            activeSpeedTestProcesses.delete(config.id);
+            return;
+        }
+        const configPath = genConfigResponse.path;
+        let xrayProcess;
+
+        try {
+            xrayProcess = spawn(xrayPath, ['run', '-c', configPath]);
+            activeSpeedTestProcesses.set(config.id, xrayProcess);
+            xrayProcess.on('error', (spawnError) => {
+                console.error(`Failed to start Xray for speed test (config ${config.id}):`, spawnError);
+                mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: `Xray start error: ${spawnError.message}`, testType: 'speed' });
+                return;
+            });
+
+            // Wait for Xray to start
+            const xrayStartTimeoutMs = settings.testTimeout > 5 ? (settings.testTimeout * 1000 / 2) : 5000;
+            try {
+                await new Promise((resolve, reject) => {
+                    const timeoutId = setTimeout(() => reject(new Error('Xray startup timeout for speed test')), xrayStartTimeoutMs);
+                    let outputBuffer = '';
+                    const onData = (data) => {
+                        outputBuffer += data.toString();
+                        if (/Xray.*started/i.test(outputBuffer)) {
+                            clearTimeout(timeoutId);
+                            xrayProcess.stdout.removeListener('data', onData);
+                            resolve();
+                        }
+                    };
+                    xrayProcess.stdout.on('data', onData);
+                    xrayProcess.once('exit', (code, signal) => { /* ... error handling ... */ reject(new Error(`Xray exited prematurely (speed test) with code ${code}, signal ${signal}`)); });
+                });
+            } catch (startupError) {
+                console.error(`Xray startup error for speed test (config ${config.id}):`, startupError.message);
+                mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: startupError.message, testType: 'speed' });
+                return; // Handled in finally
+            }
+
+            const agent = new SocksProxyAgent(`socks5://127.0.0.1:${testPort}`);
+            const startTime = Date.now();
+            let fileSize = 0;
+            try {
+                const response = await axios.get(speedTestFileUrl, {
+                    httpAgent: agent,
+                    httpsAgent: agent,
+                    responseType: 'arraybuffer', // Important for getting content-length or measuring downloaded bytes
+                    timeout: settings.testTimeout * 1000 * 2, // Longer timeout for speed test (e.g., 2x standard test timeout)
+                    onDownloadProgress: (progressEvent) => {
+                        if (progressEvent.total) {
+                            fileSize = progressEvent.total;
+                        } else if (progressEvent.loaded) {
+                             fileSize = progressEvent.loaded; // Fallback if Content-Length is not provided
+                        }
+                    }
+                });
+
+                const endTime = Date.now();
+                const durationSeconds = (endTime - startTime) / 1000;
+
+                if (!fileSize && response.data) { // If Content-Length was missing, use actual downloaded bytes
+                    fileSize = response.data.byteLength;
+                }
+
+                if (durationSeconds > 0 && fileSize > 0) {
+                    const speedBps = (fileSize * 8) / durationSeconds; // Bits per second
+                    const speedMbps = (speedBps / (1024 * 1024)).toFixed(2); // Megabits per second
+                    mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: parseFloat(speedMbps), testType: 'speed' });
+                } else {
+                    throw new Error('Speed test failed: Invalid duration or file size.');
+                }
+
+            } catch (dlError) {
+                if (isDev) console.warn(`Speed test download failed for ${config.name}: ${dlError.message}`);
+                mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: dlError.message || 'Download failed', testType: 'speed' });
+            }
+
+        } catch (error) {
+            mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: error.message || 'General error in speed test', testType: 'speed' });
+        } finally {
+            if (xrayProcess && !xrayProcess.killed) xrayProcess.kill();
+            if (configPath) fs.unlink(configPath, (err) => { if (err) console.error(`Failed to delete temp config for speed test '${configPath}':`, err); });
+            activeSpeedTestProcesses.delete(config.id);
+            completedCount++;
+            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
+            if (completedCount === configs.length) {
+                mainWindow.webContents.send('test:finish');
+                if(isDev) console.log("[Main] Speed Test sequence finished.");
+            }
+        }
+    };
+
+    (async () => {
+        for (const config of configs) {
+            await runSingleSpeedTest(config);
+        }
+    })();
+});
+
+
 // --- System Proxy & Connection Management ---
 const PROXY_PORT = 10808;
 ipcMain.on('proxy:connect', (event, configLink) => {

@@ -19,8 +19,9 @@ contextBridge.exposeInMainWorld('api', {
 
     // Testing
     startTests: (data) => ipcRenderer.send('test:start', data),
-    startRealDelayTests: (data) => ipcRenderer.send('test:real-delay', data), // New
-    stopTests: () => ipcRenderer.send('test:stop'), // Can stop both types of tests for now
+    startRealDelayTests: (data) => ipcRenderer.send('test:real-delay', data),
+    startSpeedTests: (data) => ipcRenderer.send('test:speed', data), // New
+    stopTests: () => ipcRenderer.send('test:stop'),
     onTestResult: (callback) => ipcRenderer.on('test:result', (_event, ...args) => callback(...args)),
     onTestProgress: (callback) => ipcRenderer.on('test:progress', (_event, ...args) => callback(...args)),
     onTestFinish: (callback) => ipcRenderer.on('test:finish', (_event, ...args) => callback(...args)),

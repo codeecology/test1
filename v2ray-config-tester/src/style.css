@@ -748,10 +748,59 @@ tbody tr.connected:hover {
     overflow-y: auto;
     font-family: 'Courier New', Courier, monospace; /* Monospace for link */
 }
-#configDetailModalBody .empty-state.error-state {
+#configDetailModalBody .empty-state.error-state { /* This selector is for the modal, panel uses .config-details-panel .empty-state */
     color: var(--error-color);
     font-weight: 500;
 }
+.config-details-panel .empty-state.error-state { /* Style for error state in panel */
+    color: var(--error-color);
+    font-weight: 500;
+}
+
+
+/* Test History in Details Panel */
+.config-details-panel .detail-section-title {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.3rem;
+}
+
+.test-history-list {
+    list-style: none;
+    padding-left: 0;
+    font-size: 0.85rem;
+}
+
+.history-item {
+    padding: 0.4rem 0.2rem;
+    border-bottom: 1px dashed var(--border-color); /* Softer separator */
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping for long lines */
+    gap: 0.5rem;
+}
+.history-item:last-child {
+    border-bottom: none;
+}
+.history-item.empty {
+    color: var(--text-secondary-color);
+    font-style: italic;
+}
+.history-date {
+    color: var(--text-secondary-color);
+    margin-right: 0.5em;
+    white-space: nowrap;
+}
+.history-type {
+    font-weight: 500;
+}
+.history-result {
+    /* Style based on success/failure if desired */
+}
+
 
 .column-visibility-grid {
     display: grid;
