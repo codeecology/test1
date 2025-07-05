@@ -423,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Main table
         $('#configsTableBody').addEventListener('click', handleTableClick);
         $('#configsTableBody').addEventListener('contextmenu', handleTableContextMenu);
-        $('#configsTable th[data-sort]').forEach(th => th.addEventListener('click', handleSortClick));
+        $$('#configsTable th[data-sort]').forEach(th => th.addEventListener('click', handleSortClick)); // Corrected $ to $$
         $('#selectAllCheckbox').addEventListener('change', handleSelectAllToggle);
 
 
