@@ -138,9 +138,23 @@
                     <label for="fontSizeSelect" data-lang="setting_font_size">اندازه فونت</label>
                     <select id="fontSizeSelect">
                         <option value="small" data-lang="font_small">کوچک</option>
-                        <option value="medium" data-lang="font_medium">متوسط</option>
+                        <option value="medium" data-lang="font_medium" selected>متوسط</option> <!-- Default selected -->
                         <option value="large" data-lang="font_large">بزرگ</option>
                     </select>
+                </div>
+                <hr>
+                <h4 data-lang="settings_real_delay_title">تنظیمات تست تأخیر واقعی</h4>
+                <div class="form-group">
+                    <label for="realDelayTestUrlInput" data-lang="setting_real_delay_url">آدرس تست تأخیر واقعی</label>
+                    <input type="text" id="realDelayTestUrlInput" value="https://www.google.com/generate_204">
+                </div>
+                <div class="form-group">
+                    <label for="realDelayTestPingsInput" data-lang="setting_real_delay_pings">تعداد پینگ‌ها</label>
+                    <input type="number" id="realDelayTestPingsInput" value="3" min="1" max="10">
+                </div>
+                 <div class="form-group">
+                    <label for="realDelayTestTimeoutInput" data-lang="setting_real_delay_timeout">زمان انتظار پینگ (میلی‌ثانیه)</label>
+                    <input type="number" id="realDelayTestTimeoutInput" value="2000" min="500" step="100">
                 </div>
                 <hr>
                 <h4>مدیریت داده‌ها</h4>

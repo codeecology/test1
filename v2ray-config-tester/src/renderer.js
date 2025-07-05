@@ -163,6 +163,10 @@ document.addEventListener('DOMContentLoaded', () => {
             font_small: "Small",
             font_medium: "Medium",
             font_large: "Large",
+            settings_real_delay_title: "Real Delay Test Settings",
+            setting_real_delay_url: "Real Delay Test URL",
+            setting_real_delay_pings: "Number of Pings",
+            setting_real_delay_timeout: "Ping Timeout (ms)",
             // Messages for empty table states
             no_configs_yet_message: "No configurations added yet. Click \"Add Config\" or \"Import\".",
             no_configs_match_search_message: "No configurations match your search term.",
@@ -171,7 +175,9 @@ document.addEventListener('DOMContentLoaded', () => {
             no_healthy_configs_message: "No healthy configurations found.",
             // Export selected
             export_selected_btn: "Export Selected",
+            real_delay_test_selected_ctx: "Real Delay Test ({count})",
             toast_no_configs_selected_export: "No configurations selected for export.",
+            toast_no_configs_selected_test: "No configurations selected for testing.",
             toast_selected_exported_success: "{count} selected config(s) exported successfully.",
             toast_export_failed: "Export failed: {error}",
         },
@@ -315,6 +321,10 @@ document.addEventListener('DOMContentLoaded', () => {
             font_small: "کوچک",
             font_medium: "متوسط",
             font_large: "بزرگ",
+            settings_real_delay_title: "تنظیمات تست تأخیر واقعی",
+            setting_real_delay_url: "آدرس تست تأخیر واقعی",
+            setting_real_delay_pings: "تعداد پینگ‌ها",
+            setting_real_delay_timeout: "زمان انتظار پینگ (میلی‌ثانیه)",
             // Messages for empty table states - Farsi
             no_configs_yet_message: "هنوز هیچ کانفیگی اضافه نشده. روی «افزودن کانفیگ» یا «ورود از فایل» کلیک کنید.",
             no_configs_match_search_message: "هیچ کانفیگی با عبارت جستجوی شما مطابقت ندارد.",
@@ -323,7 +333,9 @@ document.addEventListener('DOMContentLoaded', () => {
             no_healthy_configs_message: "هیچ کانفیگ سالمی یافت نشد.",
             // Export selected - Farsi
             export_selected_btn: "خروجی منتخب‌ها",
+            real_delay_test_selected_ctx: "تست تأخیر واقعی ({count})",
             toast_no_configs_selected_export: "هیچ کانفیگی برای خروجی انتخاب نشده است.",
+            toast_no_configs_selected_test: "هیچ کانفیگی برای تست انتخاب نشده است.",
             toast_selected_exported_success: "{count} کانفیگ منتخب با موفقیت صادر شد.",
             toast_export_failed: "خطا در صدور: {error}",
         }
@@ -942,6 +954,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const fontSizeSelect = $('#fontSizeSelect');
             if (fontSizeSelect) fontSizeSelect.value = state.settings.fontSize || 'medium'; else console.warn('#fontSizeSelect not found');
 
+            // Populate Real Delay Test settings
+            const realDelayTestUrlInput = $('#realDelayTestUrlInput');
+            if (realDelayTestUrlInput) realDelayTestUrlInput.value = state.settings.realDelayTestUrl || 'https://www.google.com/generate_204'; else console.warn('#realDelayTestUrlInput not found');
+            const realDelayTestPingsInput = $('#realDelayTestPingsInput');
+            if (realDelayTestPingsInput) realDelayTestPingsInput.value = state.settings.realDelayTestPings || 3; else console.warn('#realDelayTestPingsInput not found');
+            const realDelayTestTimeoutInput = $('#realDelayTestTimeoutInput');
+            if (realDelayTestTimeoutInput) realDelayTestTimeoutInput.value = state.settings.realDelayTestTimeout || 2000; else console.warn('#realDelayTestTimeoutInput not found');
+
         } else if (modalId === 'promptModal') {
             const promptInput = $('#promptInput');
             if (promptInput) {
@@ -1479,8 +1499,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const testTimeout = parseInt($('#testTimeoutInput').value, 10);
         const testUrl = $('#testUrlInput').value;
         const selectedFontSize = $('#fontSizeSelect').value;
+        const realDelayTestUrl = $('#realDelayTestUrlInput').value;
+        const realDelayTestPings = parseInt($('#realDelayTestPingsInput').value, 10);
+        const realDelayTestTimeout = parseInt($('#realDelayTestTimeoutInput').value, 10);
 
         let changed = false;
+        // Standard test settings
         if (!isNaN(concurrentTests) && concurrentTests > 0 && state.settings.concurrentTests !== concurrentTests) {
             state.settings.concurrentTests = concurrentTests;
             changed = true;
@@ -1493,13 +1517,28 @@ document.addEventListener('DOMContentLoaded', () => {
             state.settings.testUrl = testUrl;
             changed = true;
         }
+        // Font size setting
         if (selectedFontSize && state.settings.fontSize !== selectedFontSize) {
             applyFontSize(selectedFontSize); // This also updates state.settings.fontSize
             changed = true;
         }
+        // Real Delay Test settings
+        if (realDelayTestUrl && state.settings.realDelayTestUrl !== realDelayTestUrl) {
+            state.settings.realDelayTestUrl = realDelayTestUrl;
+            changed = true;
+        }
+        if (!isNaN(realDelayTestPings) && realDelayTestPings > 0 && state.settings.realDelayTestPings !== realDelayTestPings) {
+            state.settings.realDelayTestPings = realDelayTestPings;
+            changed = true;
+        }
+        if (!isNaN(realDelayTestTimeout) && realDelayTestTimeout >= 100 && state.settings.realDelayTestTimeout !== realDelayTestTimeout) { // Ensure timeout is reasonable
+            state.settings.realDelayTestTimeout = realDelayTestTimeout;
+            changed = true;
+        }
+
 
         if (changed) {
-            saveAllData(); // This will now save fontSize as well
+            saveAllData();
             showToast(lang('toast_settings_saved'), 'success');
         }
     };
@@ -1978,8 +2017,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handleDeleteUnhealthy = async () => {
-        const unhealthyConfigs = state.configs.filter(c => c.status === 'unhealthy' || c.status === 'error' || (c.status === 'untested' && c.delay === -1));
-        if (unhealthyConfigs.length === 0) {
+        // Now includes 'error' status explicitly as part of what's considered "unhealthy" for deletion.
+        // Also includes items that were tested but resulted in a negative delay (often indicating an issue).
+        const configsToDelete = state.configs.filter(c =>
+            c.status === 'unhealthy' ||
+            c.status === 'error' ||
+            (c.status === 'untested' && c.delay === -1) || // Typically means a test ran but failed before status was set, e.g. timeout
+            (c.delay !== null && c.delay < 0 && c.status !== 'testing') // Catch-all for tested items with negative delay
+        );
+        if (configsToDelete.length === 0) {
             showToast(lang('toast_no_unhealthy_to_delete'), 'info');
             return;
         }
@@ -1988,13 +2034,12 @@ document.addEventListener('DOMContentLoaded', () => {
             message: lang('confirm_delete_unhealthy_message', { count: unhealthyConfigs.length }) // Add lang key
         });
         if (confirmed) {
-            const unhealthyIds = new Set(unhealthyConfigs.map(c => c.id));
-            state.configs = state.configs.filter(c => !unhealthyIds.has(c.id));
-            state.selectedConfigIds = state.selectedConfigIds.filter(id => !unhealthyIds.has(id));
+            const idsToDelete = new Set(configsToDelete.map(c => c.id));
+            state.configs = state.configs.filter(c => !idsToDelete.has(c.id));
+            state.selectedConfigIds = state.selectedConfigIds.filter(id => !idsToDelete.has(id));
             saveAllData();
-            renderAll(); // This calls updateDashboardStatsInStatusBar
-            // updateDashboard();
-            showToast(lang('toast_unhealthy_deleted', { count: unhealthyIds.size }), 'success');
+            renderAll();
+            showToast(lang('toast_unhealthy_deleted', { count: idsToDelete.size }), 'success');
         }
     };
 
@@ -2221,7 +2266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Actions for any selection (single or multiple)
         if (state.selectedConfigIds.length > 0) {
             items.push({
-                label: `${lang('test_selected')} (${state.selectedConfigIds.length})`,
+                label: `${lang('test_selected')} (${state.selectedConfigIds.length})`, // This is the standard test
                 action: () => {
                     if (state.isTesting) {
                         showToast(lang('toast_test_already_running'), 'warning');
@@ -2240,6 +2285,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     $('#progressText').textContent = `Testing 0/${configsToTest.length}`;
                     window.api.startTests({ configs: configsToTest, settings: state.settings });
                 }
+            });
+            // Add Real Delay Test option
+            items.push({
+                label: `${lang('real_delay_test_selected_ctx', { count: state.selectedConfigIds.length })}`, // Add lang key
+                action: () => {
+                    if (state.isTesting) {
+                        showToast(lang('toast_test_already_running'), 'warning');
+                        return;
+                    }
+                    const configsToTest = state.configs.filter(c => state.selectedConfigIds.includes(c.id));
+                    if (configsToTest.length === 0) {
+                        showToast(lang('toast_no_configs_selected_test'), 'warning'); // Add lang key
+                        return;
+                    }
+                    state.isTesting = true; // Use the same flag for now
+                    configsToTest.forEach(c => c.status = 'testing'); // Or a new status like 'real_testing'
+                    renderTable();
+                    updateTestUI();
+                     $('#progressBar').style.width = '0%';
+                    $('#progressText').textContent = `Real Delay Testing 0/${configsToTest.length}`;
+
+                    window.api.startRealDelayTests({ configs: configsToTest, settings: state.settings });
+                },
+                iconClass: 'fa-solid fa-stopwatch' // Different icon
             });
         }
 

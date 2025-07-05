@@ -361,6 +361,29 @@ function stopAllTests() {
     mainWindow.webContents.send('test:finish');
 }
 
+// IPC Handler for Real Delay Test (Phase 1: Basic Structure)
+ipcMain.on('test:real-delay', (event, { configs, settings }) => {
+    // const { realDelayTestUrl, realDelayTestPings, realDelayTestTimeout } = settings; // These will be from the global settings
+    if (isDev) {
+        console.log(`[Main] Received 'test:real-delay' for ${configs.length} configs.`);
+        console.log('[Main] Real Delay Test Settings:', settings.realDelayTestUrl, settings.realDelayTestPings, settings.realDelayTestTimeout);
+    }
+    // TODO: Implement actual real delay testing logic here in Phase 2.
+    // For now, just acknowledge. Maybe send a completion event after a mock delay.
+    setTimeout(() => {
+        // Mock results for now
+        configs.forEach(config => {
+            mainWindow.webContents.send('test:result', { // Can reuse 'test:result' or create a new event like 'test:real-delay-result'
+                id: config.id,
+                delay: Math.random() > 0.3 ? Math.floor(Math.random() * 1000) + 50 : -1, // Mock some failures
+                testType: 'real-delay' // Add a type to distinguish if needed
+            });
+        });
+        mainWindow.webContents.send('test:finish'); // Signal completion
+        if(isDev) console.log("[Main] Mock Real Delay Test finished.");
+    }, 2000); // Mock 2 second test duration
+});
+
 // --- System Proxy & Connection Management ---
 const PROXY_PORT = 10808;
 ipcMain.on('proxy:connect', (event, configLink) => {
