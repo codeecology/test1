@@ -159,6 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx_select_unhealthy_in_group: "Select Unhealthy in Group",
             ctx_select_untested_in_group: "Select Untested in Group",
             toast_none_selected_by_status: "No configs with status '{status}' found in current view to select.",
+            setting_font_size: "Font Size",
+            font_small: "Small",
+            font_medium: "Medium",
+            font_large: "Large",
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -296,6 +300,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx_select_unhealthy_in_group: "انتخاب ناسالم‌ها در گروه",
             ctx_select_untested_in_group: "انتخاب تست‌نشده‌ها در گروه",
             toast_none_selected_by_status: "هیچ کانفیگی با وضعیت «{status}» در نمای فعلی برای انتخاب یافت نشد.",
+            setting_font_size: "اندازه فونت",
+            font_small: "کوچک",
+            font_medium: "متوسط",
+            font_large: "بزرگ",
         }
     };
     const lang = (key, params = {}) => {
@@ -361,9 +369,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.settings && state.settings.lastTestCompletionTime) {
             state.lastTestCompletionTime = state.settings.lastTestCompletionTime;
         }
+        // Apply initial font size
+        applyFontSize(state.settings.fontSize || 'medium');
+
         addEventListeners();
-        renderAll();
-        updateDashboard(); // Initial dashboard update
+        renderAll(); // renderAll calls updateDashboardStatsInStatusBar
+    };
+
+    const applyFontSize = (size) => {
+        // size will be 'small', 'medium', or 'large'
+        let fontSizeValue;
+        switch (size) {
+            case 'small':
+                fontSizeValue = 'var(--font-size-small)';
+                break;
+            case 'large':
+                fontSizeValue = 'var(--font-size-large)';
+                break;
+            case 'medium':
+            default:
+                fontSizeValue = 'var(--font-size-medium)';
+                break;
+        }
+        document.documentElement.style.setProperty('--current-font-size', fontSizeValue);
+        state.settings.fontSize = size; // Keep track of current setting
     };
 
     // --- Render Functions ---
@@ -400,15 +429,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const diffHours = Math.round(diffMins / 60);
 
                 if (diffSecs < 60) {
-                    dbLastTestTime.textContent = lang('moments_ago');
+                    sbLastTestTime.textContent = lang('moments_ago');
                 } else if (diffMins < 60) {
-                    dbLastTestTime.textContent = `${diffMins} ${lang('minutes_ago')}`;
+                    sbLastTestTime.textContent = `${diffMins} ${lang('minutes_ago')}`;
                 } else if (diffHours < 24) {
-                    dbLastTestTime.textContent = `${diffHours} ${lang('hours_ago')}`;
+                    sbLastTestTime.textContent = `${diffHours} ${lang('hours_ago')}`;
                 } else if (diffHours < 48) {
-                    dbLastTestTime.textContent = lang('yesterday');
+                    sbLastTestTime.textContent = lang('yesterday');
                 } else {
-                    dbLastTestTime.textContent = lastTest.toLocaleDateString();
+                    sbLastTestTime.textContent = lastTest.toLocaleDateString();
                 }
             } else {
                 sbLastTestTime.textContent = lang('never');
@@ -456,34 +485,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const rowsInNewOrder = [];
 
         configsToRender.forEach(config => {
-            const groupName = state.groups.find(g => g.id === config.groupId)?.name || '-'; // This is not directly used in cell content below but good for context
-            let countryFlagHtml = '';
-            if (config.country && config.country.toUpperCase() !== 'XX' && config.country.length === 2) { // Ensure it's a 2-letter code and not 'XX'
-                countryFlagHtml = `<img src="https://flagcdn.com/${config.country.toLowerCase()}.svg" class="country-flag" alt="${config.country}" onerror="this.style.display='none'; this.nextSibling.textContent='${config.country}';">`;
-            } else if (config.country && config.country.toUpperCase() === 'XX') {
-                // Do not attempt to load xx.svg, just show XX text or a placeholder icon if desired
-                // countryFlagHtml will remain empty, and the span below will show 'XX'
-            }
-            // For any other invalid country codes, countryFlagHtml also remains empty.
+            const groupName = state.groups.find(g => g.id === config.groupId)?.name || '-';
+            const countryText = config.country || '-'; // Display country code or '-' if undefined
 
             const isSelected = state.selectedConfigIds.includes(config.id);
             const isConnected = config.id === state.activeConnectionId;
 
             let row = existingRowsById.get(config.id);
             if (row) { // Row exists, update it
-                // Update selection class
                 if (isSelected) row.classList.add('selected'); else row.classList.remove('selected');
-                // Update connected class
                 if (isConnected) row.classList.add('connected'); else row.classList.remove('connected');
 
-                // Update individual cells for changed content
-                // This is more granular and efficient than row.innerHTML if only some data changes often (like status/delay)
                 const cells = row.cells;
-                cells[0].firstChild.checked = isSelected; // Checkbox
+                cells[0].firstChild.checked = isSelected;
 
-                const statusCell = cells[1]; // Second cell is the status cell
+                const statusCell = cells[1];
                 const statusIndicator = statusCell.querySelector('.status-indicator');
-                const statusText = statusCell.querySelector('span:last-child'); // The text part of the status
+                const statusText = statusCell.querySelector('span:last-child');
 
                 if (statusIndicator && statusText) {
                     const currentStatusClass = statusIndicator.className.match(/status-\S+/)?.[0];
@@ -492,64 +510,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (currentStatusClass) statusIndicator.classList.remove(currentStatusClass);
                         statusIndicator.classList.add(newStatusClass);
                     }
-                    // Ensure status-indicator class is present if it was missing but the element was found
                     if (!statusIndicator.classList.contains('status-indicator')) {
                         statusIndicator.classList.add('status-indicator');
                     }
                     statusText.textContent = formatStatus(config.status);
-                } else {
-                    console.error(`renderTable: Status cell for config ID: ${config.id} missing expected children. Rebuilding. Cell HTML:`, statusCell.innerHTML);
-                    // Forcefully rebuild the cell's children
-                    while (statusCell.firstChild) {
-                        statusCell.removeChild(statusCell.firstChild);
-                    }
-                    const newIndicatorSpan = document.createElement('span');
-                    newIndicatorSpan.classList.add('status-indicator');
-                    newIndicatorSpan.classList.add(`status-${config.status || 'untested'}`);
-
-                    const newStatusTextSpan = document.createElement('span');
-                    newStatusTextSpan.textContent = formatStatus(config.status);
-
-                    statusCell.appendChild(newIndicatorSpan);
-                    statusCell.appendChild(newStatusTextSpan);
+                } else { // Fallback if structure is broken (should not happen ideally)
+                    statusCell.innerHTML = `<span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span>`;
                 }
 
                 cells[2].textContent = config.name;
                 cells[2].title = config.name;
 
-                // Country cell update - more granular to avoid broken img for 'XX'
-                const countryCell = cells[3];
-                const existingImg = countryCell.querySelector('img.country-flag');
-                const existingSpan = countryCell.querySelector('span');
-
-                if (config.country && config.country.toUpperCase() !== 'XX') {
-                    if (existingImg) {
-                        const newSrc = `https://flagcdn.com/${config.country.toLowerCase()}.svg`;
-                        if (existingImg.src !== newSrc) existingImg.src = newSrc;
-                        existingImg.alt = config.country;
-                        existingImg.style.display = '';
-                    } else {
-                        const img = document.createElement('img');
-                        img.src = `https://flagcdn.com/${config.country.toLowerCase()}.svg`;
-                        img.alt = config.country;
-                        img.className = 'country-flag';
-                        countryCell.prepend(img); // Prepend to keep order if span exists
-                    }
-                    if (existingSpan) existingSpan.textContent = config.country;
-                    else { // Create span if not exists
-                        const span = document.createElement('span');
-                        span.textContent = config.country;
-                        countryCell.appendChild(span);
-                    }
-                } else { // 'XX' or no country
-                    if (existingImg) existingImg.style.display = 'none';
-                    if (existingSpan) existingSpan.textContent = config.country || ''; // Display 'XX' or empty
-                    else { // Create span if not exists
-                        const span = document.createElement('span');
-                        span.textContent = config.country || '';
-                        countryCell.appendChild(span);
-                    }
-                }
+                // Update Country cell to just text
+                cells[3].textContent = countryText;
+                cells[3].className = 'country-cell'; // Ensure class is set for styling if needed
 
                 cells[4].textContent = formatDelay(config.delay);
                 cells[5].textContent = config.protocol;
@@ -569,7 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="checkbox-cell"><input type="checkbox" ${isSelected ? 'checked' : ''}></td>
                     <td class="status-cell"><span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span></td>
                     <td title="${config.name}">${config.name}</td>
-                    <td class="country-cell">${countryFlagHtml}<span>${config.country || ''}</span></td>
+                    <td class="country-cell">${countryText}</td>
                     <td>${formatDelay(config.delay)}</td>
                     <td>${config.protocol}</td>
                     <td>${config.network}</td>
@@ -865,9 +839,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (addedCount > 0) {
             saveAllData();
-            renderAll();
-            updateDashboard(); // Update dashboard after adding configs
-            showToast(`${addedCount} ${lang('toast_configs_added')}`, 'success');
+            renderAll(); // This calls updateDashboardStatsInStatusBar
+            // updateDashboard(); // Redundant
+            showToast(lang('toast_configs_added_count', { count: addedCount }), 'success');
+        }
+        if (failedCount > 0) {
+            showToast(lang('toast_configs_failed_count', { count: failedCount }), 'error');
         }
     };
 
@@ -914,6 +891,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (concurrentTestsInput) concurrentTestsInput.value = state.settings.concurrentTests; else console.warn('#concurrentTestsInput not found');
             if (testTimeoutInput) testTimeoutInput.value = state.settings.testTimeout; else console.warn('#testTimeoutInput not found');
             if (testUrlInput) testUrlInput.value = state.settings.testUrl; else console.warn('#testUrlInput not found');
+            // Populate font size select
+            const fontSizeSelect = $('#fontSizeSelect');
+            if (fontSizeSelect) fontSizeSelect.value = state.settings.fontSize || 'medium'; else console.warn('#fontSizeSelect not found');
+
         } else if (modalId === 'promptModal') {
             const promptInput = $('#promptInput');
             if (promptInput) {
@@ -1401,6 +1382,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const concurrentTests = parseInt($('#concurrentTestsInput').value, 10);
         const testTimeout = parseInt($('#testTimeoutInput').value, 10);
         const testUrl = $('#testUrlInput').value;
+        const selectedFontSize = $('#fontSizeSelect').value;
 
         let changed = false;
         if (!isNaN(concurrentTests) && concurrentTests > 0 && state.settings.concurrentTests !== concurrentTests) {
@@ -1415,12 +1397,15 @@ document.addEventListener('DOMContentLoaded', () => {
             state.settings.testUrl = testUrl;
             changed = true;
         }
+        if (selectedFontSize && state.settings.fontSize !== selectedFontSize) {
+            applyFontSize(selectedFontSize); // This also updates state.settings.fontSize
+            changed = true;
+        }
 
         if (changed) {
-            saveAllData();
-            showToast('Settings saved!', 'success');
+            saveAllData(); // This will now save fontSize as well
+            showToast(lang('toast_settings_saved'), 'success');
         }
-        // closeModal() will be handled by the button that calls this, or by generic modal close.
     };
 
     const handleSelectAllToggle = (e) => {
@@ -1667,8 +1652,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.selectedConfigIds = [];
                 state.lastTestCompletionTime = null;
                 saveAllData();
-                renderAll();
-                updateDashboard();
+                renderAll(); // renderAll already calls updateDashboardStatsInStatusBar
+                // updateDashboard(); // This was the error, and it's redundant.
                 showToast(lang('toast_all_data_cleared'), 'success');
             })
             .catch(error => {
@@ -1784,25 +1769,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             renderTable(); // Re-render for selection changes
             updateConnectionButton();
+        } else if (!isCheckboxClick && !isSpecialKey) { // Simple row click (not on checkbox, no special keys)
+            state.selectedConfigIds = [configId];
+            state.lastSelectedId = configId;
+            renderTable();
+            updateConnectionButton();
         }
-
-        // Logic for showing details panel (only on simple row click, not checkbox/multi-select)
-        // This is now REMOVED as details are in context menu.
-        // if (!isCheckboxClick && !isSpecialKey) {
-        //     if (state.activeDetailConfigId === configId && $('#configDetailsPanel').classList.contains('open')) {
-        //         // If already open for this config, a simple click might close it (optional behavior)
-        //         // For now, let's assume a simple click on an already detailed config does nothing to the panel
-        //         // or re-affirms it. Or, if we want toggle: closeDetailsPanel();
-        //     } else {
-        //         showDetailsPanel(configId);
-        //     }
-        // } else if (isCheckboxClick && state.selectedConfigIds.includes(configId) && state.selectedConfigIds.length === 1) {
-        //     // If a checkbox is clicked and it's the only selected item, also show its details.
-        //     showDetailsPanel(configId);
-        // } else if (state.selectedConfigIds.length !== 1 && $('#configDetailsPanel').classList.contains('open')) {
-        //     // If multiple items are now selected, or no items, close the details panel.
-        //     closeDetailsPanel();
-        // }
     };
 
     const handleTableContextMenu = async (e) => { // Made async to fetch details
@@ -1924,8 +1896,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.configs = state.configs.filter(c => !unhealthyIds.has(c.id));
             state.selectedConfigIds = state.selectedConfigIds.filter(id => !unhealthyIds.has(id));
             saveAllData();
-            renderAll();
-            updateDashboard();
+            renderAll(); // This calls updateDashboardStatsInStatusBar
+            // updateDashboard();
             showToast(lang('toast_unhealthy_deleted', { count: unhealthyIds.size }), 'success');
         }
     };
@@ -2060,8 +2032,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.selectedConfigIds = [];
             state.lastSelectedId = null;
             saveAllData();
-            renderAll();
-            updateDashboard();
+            renderAll(); // This calls updateDashboardStatsInStatusBar
+            // updateDashboard();
             showToast(lang('toast_configs_deleted', { count: selectionIdSet.size }), 'success');
         }
     };
@@ -2216,8 +2188,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // --- End Assign to Group Options ---
 
-        // Group-specific selection actions (only if not right-clicking on an empty area)
-        if (row && row.dataset.id) { // Check if the context menu is on a row (i.e., specific config context)
+        // Group-specific selection actions (only if a single config is the context)
+        if (originalConfig) {
             items.push({ type: 'separator' });
             items.push({ label: lang('ctx_select_healthy_in_group'), action: () => handleSelectByStatusInGroup('healthy'), iconClass: 'fa-solid fa-check-circle' });
             items.push({ label: lang('ctx_select_unhealthy_in_group'), action: () => handleSelectByStatusInGroup('unhealthy'), iconClass: 'fa-solid fa-heart-crack' });
@@ -2240,7 +2212,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderTable();
         updateStatusBar();
-        updateDashboard();
+        updateDashboardStatsInStatusBar();
     });
 
     window.api.onTestProgress(({ progress, total, completed }) => {
@@ -2267,7 +2239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTable();
         updateTestUI();
         updateStatusBar();
-        updateDashboard();
+        updateDashboardStatsInStatusBar();
 
         const totalConfigs = state.configs.length;
         const healthyConfigs = state.configs.filter(c => c.status === 'healthy').length;
@@ -2293,7 +2265,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderTable();
         updateConnectionButton();
-        updateDashboard();
+        updateDashboardStatsInStatusBar();
     });
 
     // FEATURE: Live Ping (Idea #2)

@@ -11,6 +11,13 @@
     --font-family: 'Vazirmatn', sans-serif, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     --transition-fast: 0.2s ease-in-out;
     --transition-slow: 0.3s ease-in-out;
+
+    /* Base font sizes - can be overridden by body classes */
+    --font-size-small: 13px;
+    --font-size-medium: 15px; /* Default */
+    --font-size-large: 17px;
+
+    --current-font-size: var(--font-size-medium); /* Default will be medium */
 }
 
 /* Dark Theme (Default) */
@@ -98,8 +105,8 @@ body {
     font-family: var(--font-family);
     background-color: var(--bg-color);
     color: var(--text-color);
-    font-size: 15px; /* Slightly increase base font size for readability */
-    line-height: 1.6; /* Improve line spacing */
+    font-size: var(--current-font-size); /* Use CSS variable for global font size */
+    line-height: 1.6;
     overflow: hidden;
     user-select: none;
     transition: background-color var(--transition-fast), color var(--transition-fast);
@@ -604,14 +611,11 @@ tbody tr.connected:hover {
 .status-testing { background-color: var(--warning-color); color: var(--warning-color); animation: pulse 1.5s infinite ease-in-out; }
 .status-healthy { background-color: var(--success-color); color: var(--success-color); }
 .status-unhealthy { background-color: var(--error-color); color: var(--error-color); }
-.country-cell { display: flex; align-items: center; gap: 10px; }
-.country-flag {
-    width: 24px; /* Larger flag */
-    height: 18px;
-    border-radius: 3px;
-    box-shadow: 0 1px 3px var(--shadow-color);
-    background-color: var(--bg-tertiary-color); /* Placeholder bg for flags */
+.country-cell {
+    /* display: flex; align-items: center; gap: 10px; */ /* No longer needed for just text */
+    /* Styles for text alignment or padding can go here if needed */
 }
+/* .country-flag class is no longer used */
 
 /* --- Status Bar --- */
 .status-bar {
