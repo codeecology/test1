@@ -426,16 +426,143 @@ document.addEventListener('DOMContentLoaded', () => {
     // So functions calling renderAll don't need a separate call to updateSelectAllCheckboxState.
 
     const openModal = (modalId) => {
-        if (modalId === 'settingsModal') {
-            $('#concurrentTestsInput').value = state.settings.concurrentTests;
-            $('#testTimeoutInput').value = state.settings.testTimeout;
-            $('#testUrlInput').value = state.settings.testUrl;
+        const backdrop = $('#modalBackdrop');
+        if (!backdrop) {
+            console.error('Modal backdrop (#modalBackdrop) not found.');
+            showToast('Error: Modal system is broken (backdrop missing).', 'error');
+            return;
         }
-        $(`#${modalId}`).parentElement.style.display = 'flex';
+
+        const modalElement = $(`#${modalId}`);
+        if (!modalElement) {
+            console.error(`Modal element with ID #${modalId} not found.`);
+            showToast(`Error: Modal #${modalId} not found.`, 'error');
+            return;
+        }
+
+        // If specific setup is needed for a modal, do it before showing.
+        if (modalId === 'settingsModal') {
+            const concurrentTestsInput = $('#concurrentTestsInput');
+            const testTimeoutInput = $('#testTimeoutInput');
+            const testUrlInput = $('#testUrlInput');
+            if (concurrentTestsInput) concurrentTestsInput.value = state.settings.concurrentTests; else console.warn('#concurrentTestsInput not found in settings modal');
+            if (testTimeoutInput) testTimeoutInput.value = state.settings.testTimeout; else console.warn('#testTimeoutInput not found in settings modal');
+            if (testUrlInput) testUrlInput.value = state.settings.testUrl; else console.warn('#testUrlInput not found in settings modal');
+        } else if (modalId === 'promptModal') {
+            const promptInput = $('#promptInput');
+            if (promptInput) {
+                 // Ensure prompt input is visible before focusing
+                if (modalElement.style.display !== 'flex' && modalElement.style.display !== 'block') { // Check if modal is hidden
+                    // This case implies modalElement itself might have display:none, which shouldn't happen if CSS is right
+                    // However, to be safe:
+                    modalElement.style.display = 'flex'; // or 'block' based on its styling
+                }
+                promptInput.focus();
+            } else {
+                console.warn('#promptInput not found in prompt modal');
+            }
+        } else if (modalId === 'qrCodeModal') {
+            // Potentially clear old QR code name if it exists, though it's set by handleShowQRCode
+            const qrCodeNameEl = $('#qrCodeName'); // Assuming this element is for the name/link text
+            if(qrCodeNameEl) qrCodeNameEl.textContent = ''; // Clear it before showing new one
+        }
+
+
+        backdrop.style.display = 'flex'; // Show the backdrop
+        backdrop.classList.add('active');  // Trigger animation for backdrop
+
+        // Individual modals are display:flex by default in CSS, hidden by backdrop.
+        // The .active class on the modal itself can be used for entry animations if defined in CSS.
+        // e.g., .modal.active { transform: scale(1); opacity: 1; }
+        modalElement.classList.add('active');
     };
-    const closeModal = () => $('#modalBackdrop').style.display = 'none';
+
+    const closeModal = () => {
+        const backdrop = $('#modalBackdrop');
+        if (backdrop) {
+            backdrop.style.display = 'none';
+            backdrop.classList.remove('active');
+             // Also remove active class from any active modal to reset its state (e.g., for animations)
+            $$('.modal.active').forEach(modal => modal.classList.remove('active'));
+        } else {
+            console.error("Modal backdrop #modalBackdrop not found during closeModal.");
+        }
+    };
     
-    const showContextMenu = (e, items) => { /* ... (same as previous version) ... */ };
+    const showContextMenu = (e, items) => {
+        const menu = $('#contextMenu');
+        if (!menu) {
+            console.error('#contextMenu element not found.');
+            return;
+        }
+        menu.innerHTML = ''; // Clear previous items
+        menu.classList.remove('active'); // Remove active class before potential re-display
+
+        const ul = document.createElement('ul');
+        items.forEach(item => {
+            if (item.type === 'separator') {
+                const hr = document.createElement('hr');
+                ul.appendChild(hr);
+            } else {
+                const li = document.createElement('li');
+                if (item.iconClass) {
+                    const icon = document.createElement('i');
+                    item.iconClass.split(' ').forEach(cls => icon.classList.add(cls));
+                    li.appendChild(icon); // Prepend icon
+                }
+                const textNode = document.createTextNode(item.label);
+                li.appendChild(textNode);
+
+                if (item.disabled) {
+                    li.classList.add('disabled');
+                } else {
+                    li.addEventListener('click', (clickEvent) => {
+                        clickEvent.stopPropagation(); // Prevent click from bubbling to document listener immediately
+                        item.action();
+                        menu.style.display = 'none';
+                        menu.classList.remove('active');
+                    });
+                }
+                ul.appendChild(li);
+            }
+        });
+        menu.appendChild(ul);
+
+        // Position and display the menu
+        const { innerWidth, innerHeight } = window;
+        const menuWidth = menu.offsetWidth;
+        const menuHeight = menu.offsetHeight;
+        let left = e.pageX;
+        let top = e.pageY;
+
+        if (left + menuWidth > innerWidth) {
+            left = innerWidth - menuWidth - 5; // Adjust to stay within viewport
+        }
+        if (top + menuHeight > innerHeight) {
+            top = innerHeight - menuHeight - 5; // Adjust to stay within viewport
+        }
+
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+        menu.style.display = 'block';
+        requestAnimationFrame(() => { // Use rAF to ensure styles are applied before adding class for transition
+             menu.classList.add('active');
+        });
+
+
+        const clickOutsideHandler = (event) => {
+            if (!menu.contains(event.target)) {
+                menu.style.display = 'none';
+                menu.classList.remove('active');
+                document.removeEventListener('click', clickOutsideHandler, true); // Use capture phase for reliable removal
+            }
+        };
+
+        // Add timeout to allow current event loop to finish before adding listener
+        setTimeout(() => {
+            document.addEventListener('click', clickOutsideHandler, true); // Use capture phase
+        }, 0);
+    };
     
     const showToast = (message, type = 'info') => {
         const toastContainer = $('#toastContainer');
@@ -448,10 +575,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const showConfirm = ({ title, message, okText = 'تایید', cancelText = 'لغو' }) => {
         return new Promise(resolve => {
-            $('#confirmTitle').textContent = title;
-            $('#confirmMessage').textContent = message;
-            $('#confirmOkBtn').textContent = okText;
-            $('#confirmCancelBtn').textContent = cancelText;
+            const confirmTitleEl = $('#confirmTitle');
+            const confirmMessageEl = $('#confirmMessage');
+            const confirmOkBtnEl = $('#confirmOkBtn');
+            const confirmCancelBtnEl = $('#confirmCancelBtn');
+
+            if (!confirmTitleEl || !confirmMessageEl || !confirmOkBtnEl || !confirmCancelBtnEl) {
+                console.error("One or more elements for confirmModal are missing from the DOM.");
+                showToast("Error: Confirmation dialog is broken.", "error");
+                resolve(false); // Resolve with false as the dialog cannot be shown
+                return;
+            }
+
+            confirmTitleEl.textContent = title;
+            confirmMessageEl.textContent = message;
+            confirmOkBtnEl.textContent = okText;
+            confirmCancelBtnEl.textContent = cancelText;
+
             openModal('confirmModal');
 
             const onOk = () => {
@@ -477,11 +617,29 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const showPrompt = ({ title, message, defaultValue = '' }) => {
         return new Promise(resolve => {
-            $('#promptTitle').textContent = title;
-            $('#promptMessage').textContent = message;
-            $('#promptInput').value = defaultValue;
+            const promptTitleEl = $('#promptTitle');
+            const promptMessageEl = $('#promptMessage');
+            const promptInputEl = $('#promptInput');
+            const promptOkBtnEl = $('#promptOkBtn');
+            const promptCancelBtnEl = $('#promptCancelBtn');
+
+            if (!promptTitleEl || !promptMessageEl || !promptInputEl || !promptOkBtnEl || !promptCancelBtnEl) {
+                console.error("One or more elements for promptModal are missing from the DOM.");
+                showToast("Error: Prompt dialog is broken.", "error");
+                resolve(null); // Resolve with null as the dialog cannot be shown/used
+                return;
+            }
+
+            promptTitleEl.textContent = title;
+            promptMessageEl.textContent = message;
+            promptInputEl.value = defaultValue;
+
             openModal('promptModal');
-            $('#promptInput').focus();
+            promptInputEl.focus();
+            // Ensure promptInputEl is not null before adding event listener to it
+            // This is covered by the check above, but explicit check for keydown is fine
+             if(promptInputEl) promptInputEl.onkeydown = (e) => { if (e.key === 'Enter') onOk(); };
+
 
             const onOk = () => {
                 const value = $('#promptInput').value;
