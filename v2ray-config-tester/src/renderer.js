@@ -1651,6 +1651,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.selectedConfigIds = state.selectedConfigIds.filter(id => !unhealthyIds.has(id));
             saveAllData();
             renderAll();
+            updateDashboard(); // Update dashboard after deleting unhealthy configs
             showToast(`${unhealthyIds.size} unhealthy configs deleted.`, 'success');
         }
     };
@@ -1787,17 +1788,25 @@ document.addEventListener('DOMContentLoaded', () => {
             state.lastSelectedId = null;
             saveAllData();
             renderAll();
+            updateDashboard(); // Update dashboard after deleting configs
             showToast(`${selectionIdSet.size} config(s) deleted.`, 'success');
         }
     };
 
+    // This is a duplicate of handleDeleteGroup, removing it.
+    // const handleDeleteGroup = async (groupId) => {
+    //     const groupToDelete = state.groups.find(g => g.id === groupId);
+    //     if (!groupToDelete) {
+    //         showToast('Group not found.', 'error');
+    //         return;
+    //     }
 
-        const confirmed = await showConfirm({
-            title: lang('confirm_delete_title'),
-            message: `${lang('confirm_delete_group')} (Name: ${groupToDelete.name})`
-        });
-        if (confirmed) {
-            state.groups = state.groups.filter(g => g.id !== groupId);
+    //     const confirmed = await showConfirm({
+    //         title: lang('confirm_delete_group_title'), // Ensure this lang key exists
+    //         message: `${lang('confirm_delete_group_message') || 'Are you sure you want to delete the group:'} "${groupToDelete.name}"? ${lang('confirm_delete_group_message_configs_note') || 'Configs in this group will become ungrouped.'}`
+    //     });
+    //     if (confirmed) {
+    //         state.groups = state.groups.filter(g => g.id !== groupId);
             state.configs.forEach(c => { if (c.groupId === groupId) c.groupId = null; }); // Ungroup configs
             if (state.activeGroupId === groupId) state.activeGroupId = 'all'; // Reset active group if it was deleted
             saveAllData();
