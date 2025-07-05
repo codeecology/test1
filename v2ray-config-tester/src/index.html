@@ -213,6 +213,21 @@
                 </div>
             </div>
         </div>
+
+        <!-- Config Details Modal -->
+        <div id="configDetailModal" class="modal large-modal"> <!-- large-modal can be a new class for wider modal if needed -->
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-clipboard-list"></i> <span data-lang="config_details_title">جزئیات کانفیگ</span></h3>
+                <button class="close-modal-btn" data-modal-id="configDetailModal">&times;</button>
+            </div>
+            <div class="modal-body" id="configDetailModalBody">
+                <!-- Details will be populated here by renderer.js -->
+                <p class="empty-state" data-lang="loading_details">در حال بارگذاری جزئیات...</p>
+            </div>
+             <div class="modal-actions">
+                <button class="secondary-btn close-modal-btn" data-modal-id="configDetailModal" data-lang="close">بستن</button>
+            </div>
+        </div>
     </div>
     
     <!-- Context Menu (Right-click menu) -->

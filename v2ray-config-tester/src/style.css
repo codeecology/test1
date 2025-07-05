@@ -522,11 +522,46 @@ th {
 th:hover {
     background-color: var(--bg-tertiary-color);
 }
+
+/* Column-specific styling for width and text overflow */
+th, td {
+    /* Common properties already defined:
+    padding: 0.9rem 1.1rem;
+    text-align: right;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    font-size: 0.9rem;
+    */
+}
+
+/* Checkbox */
+th:nth-child(1), td:nth-child(1) { width: 4%; min-width: 40px; text-align: center; }
+/* Status */
+th:nth-child(2), td:nth-child(2) { width: 10%; min-width: 100px; }
+/* Name */
+th:nth-child(3), td:nth-child(3) { width: 25%; min-width: 150px;  max-width: 300px; /* Max width for name */}
+/* Country */
+th:nth-child(4), td:nth-child(4) { width: 10%; min-width: 90px; }
+/* Delay */
+th:nth-child(5), td:nth-child(5) { width: 8%; min-width: 80px; }
+/* Protocol */
+th:nth-child(6), td:nth-child(6) { width: 10%; min-width: 90px; }
+/* Network */
+th:nth-child(7), td:nth-child(7) { width: 10%; min-width: 90px; }
+/* Port */
+th:nth-child(8), td:nth-child(8) { width: 8%; min-width: 70px; }
+/* Details */
+th:nth-child(9), td:nth-child(9) { width: 15%; min-width: 120px; max-width: 250px; }
+
+
 th .fa-solid {
     margin-left: 10px; /* More space for sort icon */
     font-size: 0.8em;
 }
-th.checkbox-cell, td.checkbox-cell {
+th.checkbox-cell, td.checkbox-cell { /* This specific class might be redundant if using nth-child */
     width: 50px; /* Wider checkbox cell */
     text-align: center;
     padding: 0;
@@ -664,6 +699,45 @@ tbody tr.connected:hover {
 }
 
 .modal.small-modal { max-width: 450px; }
+.modal.large-modal { max-width: 700px; /* Wider modal for details */ }
+
+/* Styling for detail items within the new modal */
+#configDetailModalBody .detail-item-modal {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0; /* Slightly less padding than old panel */
+    border-bottom: 1px solid var(--border-color);
+}
+#configDetailModalBody .detail-item-modal:last-child {
+    border-bottom: none;
+}
+#configDetailModalBody .detail-label-modal {
+    font-weight: 500; /* Normal weight for modal labels */
+    color: var(--text-secondary-color);
+    font-size: 0.9rem; /* Slightly smaller */
+    margin-bottom: 0.2rem;
+}
+#configDetailModalBody .detail-value-modal {
+    font-size: 0.9rem;
+    color: var(--text-color);
+    word-wrap: break-word;
+    background-color: var(--bg-tertiary-color);
+    padding: 0.5rem 0.8rem;
+    border-radius: 6px;
+    user-select: text;
+}
+#configDetailModalBody .detail-value-modal.long {
+    white-space: pre-wrap;
+    max-height: 120px; /* Adjust max height for modal view */
+    overflow-y: auto;
+    font-family: 'Courier New', Courier, monospace; /* Monospace for link */
+}
+#configDetailModalBody .empty-state.error-state {
+    color: var(--error-color);
+    font-weight: 500;
+}
+
+
 .modal-header {
     padding: 1.25rem 1.5rem; /* More padding */
     border-bottom: 1px solid var(--border-color);

@@ -137,6 +137,28 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx_add_new_group: "Add New Group",
             ctx_test_all_visible: "Test All Visible",
             ctx_delete_all_unhealthy: "Delete All Unhealthy",
+            healthy_configs_group_title: "Healthy Configs",
+            no_groups_available: "No groups available",
+            confirm_delete_unhealthy_title: "Delete Unhealthy Configs",
+            confirm_delete_unhealthy_message: "Are you sure you want to delete {count} unhealthy/error configs?",
+            confirm_delete_config_plural: "Are you sure you want to delete {count} selected config(s)?",
+            toast_configs_added_count: "{count} new config(s) added.",
+            toast_configs_failed_count: "{count} config(s) failed to process.",
+            toast_no_configs_export: "No configs to export.",
+            confirm_clear_all_data_title: "Clear All Data",
+            confirm_clear_all_data_message: "Are you sure you want to delete ALL configs, groups, and settings? This action cannot be undone.",
+            toast_failed_clear_data: "Failed to clear data: {error}",
+            toast_failed_generate_qr: "Failed to generate QR code: {error}",
+            toast_select_one_healthy_config_connect: "Please select exactly one healthy config to connect.",
+            toast_selected_config_not_healthy: "Selected config is not healthy or not tested.",
+            testing_progress: "Testing {completed}/{total} ({progress}%)",
+            test_complete_summary: "Test complete. Total: {total}, Healthy: {healthy}",
+            view_details_ctx: "View Details",
+            // Group selection actions
+            ctx_select_healthy_in_group: "Select Healthy in Group",
+            ctx_select_unhealthy_in_group: "Select Unhealthy in Group",
+            ctx_select_untested_in_group: "Select Untested in Group",
+            toast_none_selected_by_status: "No configs with status '{status}' found in current view to select.",
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -252,6 +274,28 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx_add_new_group: "افزودن گروه جدید",
             ctx_test_all_visible: "تست همه قابل مشاهده‌ها",
             ctx_delete_all_unhealthy: "حذف همه ناسالم‌ها",
+            healthy_configs_group_title: "کانفیگ‌های سالم",
+            no_groups_available: "گروهی موجود نیست",
+            confirm_delete_unhealthy_title: "حذف کانفیگ‌های ناسالم",
+            confirm_delete_unhealthy_message: "آیا از حذف {count} کانفیگ ناسالم/خطادار مطمئن هستید؟",
+            confirm_delete_config_plural: "آیا از حذف {count} کانفیگ انتخاب شده مطمئن هستید؟",
+            toast_configs_added_count: "{count} کانفیگ جدید اضافه شد.",
+            toast_configs_failed_count: "{count} کانفیگ پردازش نشد.",
+            toast_no_configs_export: "کانفیگی برای صدور وجود ندارد.",
+            confirm_clear_all_data_title: "پاک کردن تمام داده‌ها",
+            confirm_clear_all_data_message: "آیا مطمئنید که می‌خواهید تمام کانفیگ‌ها، گروه‌ها و تنظیمات را حذف کنید؟ این عمل قابل بازگشت نیست.",
+            toast_failed_clear_data: "خطا در پاک کردن داده‌ها: {error}",
+            toast_failed_generate_qr: "خطا در ایجاد QR کد: {error}",
+            toast_select_one_healthy_config_connect: "لطفاً برای اتصال دقیقاً یک کانفیگ سالم انتخاب کنید.",
+            toast_selected_config_not_healthy: "کانفیگ انتخاب شده سالم نیست یا تست نشده.",
+            testing_progress: "در حال تست {completed}/{total} ({progress}%)",
+            test_complete_summary: "تست کامل شد. کل: {total}، سالم: {healthy}",
+            view_details_ctx: "مشاهده جزئیات",
+            // Group selection actions - Farsi
+            ctx_select_healthy_in_group: "انتخاب سالم‌ها در گروه",
+            ctx_select_unhealthy_in_group: "انتخاب ناسالم‌ها در گروه",
+            ctx_select_untested_in_group: "انتخاب تست‌نشده‌ها در گروه",
+            toast_none_selected_by_status: "هیچ کانفیگی با وضعیت «{status}» در نمای فعلی برای انتخاب یافت نشد.",
         }
     };
     const lang = (key, params = {}) => {
@@ -575,7 +619,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderGroups = () => {
         const groupList = $('#groupList');
-        groupList.innerHTML = `<li class="group-item ${state.activeGroupId === 'all' ? 'active' : ''}" data-group-id="all"><i class="fa-solid fa-globe"></i> <span>${lang('all_configs')}</span></li>`;
+        groupList.innerHTML = ''; // Clear existing groups first
+
+        // Add "All Configs" group
+        const allConfigsLi = document.createElement('li');
+        allConfigsLi.className = `group-item ${state.activeGroupId === 'all' ? 'active' : ''}`;
+        allConfigsLi.dataset.groupId = 'all';
+        allConfigsLi.innerHTML = `<i class="fa-solid fa-globe"></i> <span>${lang('all_configs')}</span>`;
+        groupList.appendChild(allConfigsLi);
+
+        // Add "Healthy Configs" dynamic group
+        const healthyConfigsLi = document.createElement('li');
+        healthyConfigsLi.className = `group-item ${state.activeGroupId === 'healthy_configs' ? 'active' : ''}`;
+        healthyConfigsLi.dataset.groupId = 'healthy_configs'; // Special ID
+        healthyConfigsLi.innerHTML = `<i class="fa-solid fa-heart-circle-check"></i> <span>${lang('healthy_configs_group_title') || 'Healthy Configs'}</span>`; // Add lang key
+        // Add a count for healthy configs
+        const healthyCount = state.configs.filter(c => c.status === 'healthy').length;
+        const healthyCountSpan = document.createElement('span');
+        healthyCountSpan.className = 'group-count';
+        healthyCountSpan.textContent = healthyCount;
+        healthyConfigsLi.appendChild(healthyCountSpan);
+        groupList.appendChild(healthyConfigsLi);
+
+        // Add user-created groups
         state.groups.forEach(group => {
             const li = document.createElement('li');
             li.className = `group-item ${state.activeGroupId === group.id ? 'active' : ''}`;
@@ -662,8 +728,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Data & Logic ---
     const getVisibleConfigs = () => {
         const searchTerm = state.searchTerm.toLowerCase();
-        return state.configs
-            .filter(c => state.activeGroupId === 'all' || c.groupId === state.activeGroupId)
+        let filteredConfigs = state.configs;
+
+        if (state.activeGroupId === 'healthy_configs') {
+            filteredConfigs = state.configs.filter(c => c.status === 'healthy');
+        } else if (state.activeGroupId !== 'all') {
+            filteredConfigs = state.configs.filter(c => c.groupId === state.activeGroupId);
+        }
+        // If state.activeGroupId is 'all', no group filtering is done initially on filteredConfigs
+
+        return filteredConfigs
             .filter(c => !searchTerm || c.name.toLowerCase().includes(searchTerm) || c.protocol.toLowerCase().includes(searchTerm) || (c.network && c.network.toLowerCase().includes(searchTerm)) || (c.address && c.address.toLowerCase().includes(searchTerm)))
             .sort((a, b) => {
                 const valA = a[state.currentSort.column];
@@ -1175,16 +1249,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (editBtn && groupItem) {
                 const groupId = editBtn.dataset.groupId;
-                if (groupId && groupId !== 'all') { // Cannot edit/delete "All Configs"
+                if (groupId && groupId !== 'all' && groupId !== 'healthy_configs') {
                     handleEditGroup(groupId);
                 }
             } else if (deleteBtn && groupItem) {
                 const groupId = deleteBtn.dataset.groupId;
-                if (groupId && groupId !== 'all') { // Cannot edit/delete "All Configs"
+                if (groupId && groupId !== 'all' && groupId !== 'healthy_configs') {
                     handleDeleteGroup(groupId);
                 }
             } else if (groupItem) {
-                // This is a click on the group item itself (not edit/delete buttons)
                 handleGroupClick(e);
             }
         });
@@ -1397,10 +1470,117 @@ document.addEventListener('DOMContentLoaded', () => {
     // For example, at the end of renderTable:
     // Original renderTable() ends here...
     updateSelectAllCheckboxState();
+    updateSelectAllCheckboxState();
     // Also call it after handleSearch, handleGroupClick, handleDeleteConfig, etc.
 
-    // Removed: showDetailsPanel, closeDetailsPanel, populateDetailsPanel as the panel is removed.
-    // Details will be integrated into the context menu.
+    const showConfigDetailsModal = async (configLink) => {
+        const modalBody = $('#configDetailModalBody');
+        if (!modalBody) {
+            console.error("#configDetailModalBody not found");
+            return;
+        }
+        modalBody.innerHTML = `<p class="empty-state" data-lang="loading_details">${lang('loading_details')}</p>`;
+        openModal('configDetailModal');
+
+        try {
+            const result = await window.api.getFullConfigDetails(configLink);
+            const originalConfig = state.configs.find(c => c.link === configLink); // Get original for name, etc.
+
+            if (result.success && originalConfig) {
+                populateConfigDetailModalBody(modalBody, result.details, originalConfig);
+            } else {
+                throw new Error(result.error || 'Config details or original config not found.');
+            }
+        } catch (error) {
+            console.error("Error fetching/populating config details modal:", error);
+            modalBody.innerHTML = `<p class="empty-state error-state">${lang('error_fetching_details')}: ${error.message}</p>`;
+        }
+    };
+
+    const populateConfigDetailModalBody = (modalBody, details, originalConfig) => {
+        modalBody.innerHTML = ''; // Clear loading/previous state
+
+        const addDetailToModal = (labelKey, value, isLong = false) => {
+            if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+                return;
+            }
+            const item = document.createElement('div');
+            item.className = 'detail-item-modal'; // Use a different class if styling needs to differ from old panel
+
+            const label = document.createElement('div');
+            label.className = 'detail-label-modal';
+            label.textContent = lang(labelKey) || labelKey.replace(/_/g, ' ');
+
+            const valueDiv = document.createElement('div');
+            valueDiv.className = 'detail-value-modal';
+            if (typeof value === 'boolean') {
+                valueDiv.textContent = value ? lang('yes') : lang('no');
+            } else if (Array.isArray(value)) {
+                valueDiv.textContent = value.join(', ');
+            } else {
+                valueDiv.textContent = value;
+            }
+            if (isLong) valueDiv.classList.add('long');
+
+            item.appendChild(label);
+            item.appendChild(valueDiv);
+            modalBody.appendChild(item);
+        };
+
+        // Re-use the detail keys from translations
+        addDetailToModal('detail_name', originalConfig.name);
+        addDetailToModal('detail_protocol', details.protocol);
+        addDetailToModal('detail_address', originalConfig.address); // originalConfig.address should be accurate now
+        addDetailToModal('detail_port', originalConfig.portToDisplay); // originalConfig.portToDisplay should be accurate
+
+        if (details.settings) {
+            if (details.protocol === 'vless' && details.settings.vnext?.[0]?.users?.[0]) {
+                const user = details.settings.vnext[0].users[0];
+                addDetailToModal('detail_id_user', user.id);
+                addDetailToModal('detail_encryption', user.encryption);
+                addDetailToModal('detail_flow', user.flow);
+            } else if (details.protocol === 'vmess' && details.settings.vnext?.[0]?.users?.[0]) {
+                const user = details.settings.vnext[0].users[0];
+                addDetailToModal('detail_id_user', user.id);
+                addDetailToModal('detail_alter_id', user.alterId);
+                addDetailToModal('detail_security_vmess', user.security);
+            } else if (details.protocol === 'trojan' && details.settings.servers?.[0]) {
+                addDetailToModal('detail_password', details.settings.servers[0].password);
+            } else if (details.protocol === 'ss' && details.settings.servers?.[0]) {
+                addDetailToModal('detail_ss_method', details.settings.servers[0].method);
+                addDetailToModal('detail_password', details.settings.servers[0].password);
+            }
+        }
+
+        if (details.streamSettings) {
+            addDetailToModal('detail_network', details.streamSettings.network);
+            addDetailToModal('detail_security', details.streamSettings.security);
+            if (details.streamSettings.tlsSettings) {
+                const ts = details.streamSettings.tlsSettings;
+                addDetailToModal('detail_sni', ts.serverName);
+                addDetailToModal('detail_alpn', ts.alpn);
+                addDetailToModal('detail_fingerprint', ts.fingerprint);
+                addDetailToModal('detail_allow_insecure', typeof ts.allowInsecure === 'boolean' ? ts.allowInsecure : undefined);
+            }
+            if (details.streamSettings.realitySettings) { // Display REALITY settings if present
+                const rs = details.streamSettings.realitySettings;
+                addDetailToModal('detail_xtls_settings_publickey', rs.publicKey);
+                addDetailToModal('detail_xtls_settings_shortid', rs.shortId);
+                // serverName and fingerprint might be redundant if already shown in tlsSettings, but can be added if distinct
+            }
+            if (details.streamSettings.wsSettings) {
+                addDetailToModal('detail_ws_path', details.streamSettings.wsSettings.path);
+                if(details.streamSettings.wsSettings.headers) addDetailToModal('detail_ws_host', details.streamSettings.wsSettings.headers.Host);
+            }
+            if (details.streamSettings.grpcSettings) {
+                addDetailToModal('detail_service_name', details.streamSettings.grpcSettings.serviceName);
+                addDetailToModal('detail_multi_mode', typeof details.streamSettings.grpcSettings.multiMode === 'boolean' ? details.streamSettings.grpcSettings.multiMode : undefined);
+            }
+            // Add KCP, QUIC etc. if needed
+        }
+        addDetailToModal('detail_full_link', originalConfig.link, true);
+    };
+
 
     const handleAddConfigFromText = () => {
         const text = $('#pasteArea').value;
@@ -1685,6 +1865,27 @@ document.addEventListener('DOMContentLoaded', () => {
         showContextMenu(e, menuItems);
     };
 
+    const handleSelectByStatusInGroup = (statusToSelect) => {
+        const visibleConfigs = getVisibleConfigs(); // These are already filtered by current group/search
+        const configsToSelect = visibleConfigs.filter(c => c.status === statusToSelect);
+
+        if (configsToSelect.length === 0) {
+            showToast(lang('toast_none_selected_by_status', { status: lang(statusToSelect) || statusToSelect }), 'info');
+            return;
+        }
+
+        // Add to current selection or replace? For now, let's replace.
+        state.selectedConfigIds = configsToSelect.map(c => c.id);
+        if (state.selectedConfigIds.length > 0) {
+            state.lastSelectedId = state.selectedConfigIds[state.selectedConfigIds.length - 1];
+        } else {
+            state.lastSelectedId = null;
+        }
+        renderTable();
+        updateConnectionButton();
+        updateSelectAllCheckboxState(); // Ensure the master checkbox reflects the new selection
+    };
+
     const handleSearch = (e) => {
         state.searchTerm = e.target.value;
         renderTable();
@@ -1932,40 +2133,24 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
     };
 
-    const getConfigContextMenuItems = (configDetails = null, originalConfig = null) => {
+    const getConfigContextMenuItems = (configDetails = null, originalConfig = null) => { // configDetails might be null if not pre-fetched
         const items = [];
+        const selectedConfig = state.configs.find(c => c.id === state.selectedConfigIds[0]);
 
-        if (originalConfig && configDetails) {
-            items.push({ label: `${lang('detail_name')}: ${originalConfig.name}`, disabled: true, iconClass: 'fa-solid fa-tag' });
-            items.push({ label: `${lang('detail_protocol')}: ${configDetails.protocol}`, disabled: true, iconClass: 'fa-solid fa-shield-halved' });
-            items.push({ label: `${lang('detail_address')}: ${originalConfig.address}`, disabled: true, iconClass: 'fa-solid fa-server' });
-            items.push({ label: `${lang('detail_port')}: ${originalConfig.portToDisplay}`, disabled: true, iconClass: 'fa-solid fa-ethernet' });
-
-            // Add more details as needed, these are just examples
-            if (configDetails.streamSettings) {
-                items.push({ label: `${lang('detail_network')}: ${configDetails.streamSettings.network}`, disabled: true, iconClass: 'fa-solid fa-wifi' });
-                items.push({ label: `${lang('detail_security')}: ${configDetails.streamSettings.security}`, disabled: true, iconClass: 'fa-solid fa-lock' });
-                if (configDetails.streamSettings.tlsSettings && configDetails.streamSettings.tlsSettings.serverName) {
-                    items.push({ label: `${lang('detail_sni')}: ${configDetails.streamSettings.tlsSettings.serverName}`, disabled: true, iconClass: 'fa-solid fa-shield-alt' });
-                }
-                 if (configDetails.streamSettings.wsSettings && configDetails.streamSettings.wsSettings.path) {
-                    items.push({ label: `${lang('detail_ws_path')}: ${configDetails.streamSettings.wsSettings.path}`, disabled: true, iconClass: 'fa-solid fa-route' });
-                }
-            }
+        // Standard actions for single selection
+        if (state.selectedConfigIds.length === 1 && selectedConfig) {
+            items.push({
+                label: lang('view_details_ctx') || "View Details", // Add lang key: view_details_ctx
+                action: () => showConfigDetailsModal(selectedConfig.link),
+                iconClass: 'fa-solid fa-circle-info'
+            });
             items.push({ type: 'separator' });
+            items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(selectedConfig.link).then(() => showToast(lang('toast_link_copied'), 'success')).catch(e => showToast(lang('toast_failed_copy_link'), 'error')), iconClass: 'fa-solid fa-copy' });
+            items.push({ label: lang('show_qr_code'), action: () => handleShowQRCode(selectedConfig.link), iconClass: 'fa-solid fa-qrcode' });
+            items.push({ label: lang('edit_name'), action: () => handleEditName(selectedConfig), iconClass: 'fa-solid fa-pen-to-square' });
         }
 
-
-        if (state.selectedConfigIds.length === 1) {
-            // Actionable items are relevant even if details couldn't be loaded, use originalConfig if available
-            const configToActOn = originalConfig || state.configs.find(c => c.id === state.selectedConfigIds[0]);
-            if(configToActOn) {
-                 items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(configToActOn.link).then(() => showToast(lang('toast_link_copied'), 'success')).catch(e => showToast(lang('toast_failed_copy_link'), 'error')), iconClass: 'fa-solid fa-copy' });
-                 items.push({ label: lang('show_qr_code'), action: () => handleShowQRCode(configToActOn.link), iconClass: 'fa-solid fa-qrcode' });
-                 items.push({ label: lang('edit_name'), action: () => handleEditName(configToActOn), iconClass: 'fa-solid fa-pen-to-square' });
-            }
-        }
-
+        // Actions for any selection (single or multiple)
         if (state.selectedConfigIds.length > 0) {
             items.push({
                 label: `${lang('test_selected')} (${state.selectedConfigIds.length})`,
@@ -1993,38 +2178,52 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Assign to Group Options ---
         if (state.selectedConfigIds.length > 0) {
             const groupSubmenuItems = [];
-            state.groups.forEach(g => {
+            // Filter out dynamic groups like 'healthy_configs' from assignable groups
+            const assignableGroups = state.groups; // In future, if more dynamic groups, filter them out here.
+
+            assignableGroups.forEach(g => {
                 groupSubmenuItems.push({
-                    label: g.name, // No indent needed for submenu items
+                    label: g.name,
                     action: () => handleAssignToGroup(g.id)
                 });
             });
             groupSubmenuItems.push({ type: 'separator' });
             groupSubmenuItems.push({
-                label: lang('assign_to_new_group'), // Already localized
+                label: lang('assign_to_new_group'),
                 action: () => handleAssignToGroup('new')
             });
-            // Only show "Ungroup" if at least one selected config is actually in a group
+
             if (state.selectedConfigIds.some(id => {
                 const config = state.configs.find(c => c.id === id);
                 return config && config.groupId !== null;
             })) {
-                groupSubmenuItems.push({ type: 'separator' }); // Separator before Ungroup
+                groupSubmenuItems.push({ type: 'separator' });
                 groupSubmenuItems.push({
-                    label: lang('ungroup_config'), // Already localized
-                    action: () => handleAssignToGroup(null) // null groupId means ungroup
+                    label: lang('ungroup_config'),
+                    action: () => handleAssignToGroup(null)
                 });
             }
 
-            items.push({ type: 'separator' });
-            items.push({
-                label: lang('assign_to_group'), // Main menu item
-                submenu: groupSubmenuItems.length > 0 ? groupSubmenuItems : [{label: lang('no_groups_available'), disabled: true}], // Handle case with no groups
-                // No direct action for the parent, action is handled by subitems
-            });
-            items.push({ type: 'separator' });
+            // Only add the "Assign to Group" parent item if there are actual groups or "New Group" option
+            if (assignableGroups.length > 0 || true) { // True because "New Group..." is always an option
+                 items.push({ type: 'separator' });
+                items.push({
+                    label: lang('assign_to_group'),
+                    submenu: groupSubmenuItems,
+                });
+                items.push({ type: 'separator' });
+            }
         }
         // --- End Assign to Group Options ---
+
+        // Group-specific selection actions (only if not right-clicking on an empty area)
+        if (row && row.dataset.id) { // Check if the context menu is on a row (i.e., specific config context)
+            items.push({ type: 'separator' });
+            items.push({ label: lang('ctx_select_healthy_in_group'), action: () => handleSelectByStatusInGroup('healthy'), iconClass: 'fa-solid fa-check-circle' });
+            items.push({ label: lang('ctx_select_unhealthy_in_group'), action: () => handleSelectByStatusInGroup('unhealthy'), iconClass: 'fa-solid fa-heart-crack' });
+            items.push({ label: lang('ctx_select_untested_in_group'), action: () => handleSelectByStatusInGroup('untested'), iconClass: 'fa-solid fa-question-circle' });
+        }
+
 
         items.push({ label: `${lang('delete')} (${state.selectedConfigIds.length})`, action: () => handleDeleteConfig() });
         return items;
