@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- FIX: Content-Security-Policy is now correctly configured to allow required external resources. -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: https://flagcdn.com;">
+    <title>Ultimate V2Ray Tester</title>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Main stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+
+    <div class="container">
+        <!-- Sidebar for groups and quick actions -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3><i class="fa-solid fa-layer-group"></i> <span data-lang="groups">گروه‌ها</span></h3>
+                <button id="addGroupBtn" class="icon-btn" title="ایجاد گروه جدید"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            <ul id="groupList" class="group-list">
+                <!-- Groups will be dynamically added here -->
+            </ul>
+        </aside>
+
+        <!-- Resizer for the sidebar -->
+        <div class="resizer" id="resizer"></div>
+
+        <!-- Main content area -->
+        <main class="main-content">
+            <!-- Top toolbar with actions and search -->
+            <div class="toolbar">
+                <div class="actions-left">
+                    <button id="openAddModalBtn" class="primary-btn"><i class="fa-solid fa-plus"></i> <span data-lang="add_config">افزودن کانفیگ</span></button>
+                    <button id="deleteUnhealthyBtn" class="danger-btn"><i class="fa-solid fa-heart-crack"></i> <span data-lang="delete_unhealthy">حذف ناسالم‌ها</span></button>
+                </div>
+                 <div class="search-container">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" id="searchBox" placeholder="جستجو در نام، پروتکل، آدرس...">
+                </div>
+                <div class="actions-right">
+                    <button id="startTestBtn" class="primary-btn"><i class="fa-solid fa-play"></i> <span data-lang="start_test">شروع تست</span></button>
+                    <button id="stopTestBtn" disabled><i class="fa-solid fa-stop"></i> <span data-lang="stop_test">توقف تست</span></button>
+                </div>
+            </div>
+
+            <!-- Configs table -->
+            <div class="table-container">
+                <table id="configsTable">
+                    <thead>
+                        <tr>
+                            <th class="checkbox-cell"><input type="checkbox" id="selectAllCheckbox" title="انتخاب همه"></th>
+                            <th data-sort="status"><i class="fa-solid fa-signal"></i> <span data-lang="status">وضعیت</span></th>
+                            <th data-sort="name"><i class="fa-solid fa-tag"></i> <span data-lang="name">نام</span></th>
+                            <th data-sort="country"><i class="fa-solid fa-flag"></i> <span data-lang="country">کشور</span></th>
+                            <th data-sort="delay"><i class="fa-solid fa-stopwatch"></i> <span data-lang="delay">تأخیر</span></th>
+                            <th data-sort="protocol"><i class="fa-solid fa-shield-halved"></i> <span data-lang="protocol">پروتکل</span></th>
+                            <th data-sort="network"><i class="fa-solid fa-wifi"></i> <span data-lang="network">شبکه</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="configsTableBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Bottom status bar -->
+            <div class="status-bar">
+                <div class="status-left">
+                    <button id="connectBtn" class="connect-btn disconnected" disabled><i class="fa-solid fa-power-off"></i> <span data-lang="connect">اتصال</span></button>
+                    <span id="connectionStatus" data-lang="not_connected">متصل نیستید</span>
+                    <!-- FEATURE: Live ping chart placeholder -->
+                    <div id="livePingContainer" class="live-ping-container">
+                        <span id="livePingText"></span>
+                    </div>
+                </div>
+                <div class="status-center">
+                     <progress id="testProgressBar" value="0" max="100"></progress>
+                     <span id="progressText">آماده</span>
+                </div>
+                <div class="status-right">
+                    <button id="settingsBtn" class="icon-btn" title="تنظیمات"><i class="fa-solid fa-gear"></i></button>
+                    <button id="themeToggleBtn" class="icon-btn" title="تغییر تم"><i class="fa-solid fa-moon"></i></button>
+                    <button id="langToggleBtn" class="icon-btn" title="Change Language">EN</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals container -->
+    <div id="modalBackdrop" class="modal-backdrop">
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-gear"></i> <span data-lang="settings">تنظیمات</span></h3>
+                <button class="close-modal-btn" data-modal-id="settingsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4>تنظیمات تست</h4>
+                <div class="form-group">
+                    <label for="concurrentTestsInput">تعداد تست همزمان</label>
+                    <input type="number" id="concurrentTestsInput" value="10" min="1" max="50">
+                </div>
+                <div class="form-group">
+                    <label for="testTimeoutInput">زمان انتظار (Timeout) به ثانیه</label>
+                    <input type="number" id="testTimeoutInput" value="8" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="testUrlInput">آدرس سایت تست</label>
+                    <input type="text" id="testUrlInput" value="http://cp.cloudflare.com/generate_204">
+                </div>
+                <hr>
+                <h4>مدیریت داده‌ها</h4>
+                <div class="data-actions">
+                    <button id="importDataBtn"><i class="fa-solid fa-file-import"></i> بازیابی از فایل (JSON)</button>
+                    <button id="exportDataBtn"><i class="fa-solid fa-file-export"></i> پشتیبان‌گیری (JSON)</button>
+                    <button id="exportHealthyBtn"><i class="fa-solid fa-file-arrow-down"></i> خروجی سالم‌ها (Text)</button>
+                    <button id="clearAllDataBtn" class="danger-btn"><i class="fa-solid fa-trash-can"></i> حذف تمام داده‌ها</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Config Modal -->
+        <div id="addConfigModal" class="modal">
+             <div class="modal-header">
+                <h3><i class="fa-solid fa-plus"></i> <span data-lang="add_config">افزودن کانفیگ</span></h3>
+                <button class="close-modal-btn" data-modal-id="addConfigModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="subLinkInput">افزودن از لینک اشتراک</label>
+                    <div class="input-with-btn">
+                        <input type="text" id="subLinkInput" placeholder="URL لینک اشتراک...">
+                        <button id="addFromSubLinkBtn"><i class="fa-solid fa-download"></i> دریافت</button>
+                    </div>
+                </div>
+                 <div class="form-group">
+                    <label for="pasteArea">افزودن از کلیپ‌بورد یا متن</label>
+                    <textarea id="pasteArea" rows="5" placeholder="یک یا چند لینک کانفیگ را اینجا وارد کنید..."></textarea>
+                    <button id="addFromPasteBtn"><i class="fa-solid fa-paste"></i> افزودن</button>
+                </div>
+                <div class="form-group">
+                     <button id="addFromFileBtn" class="full-width"><i class="fa-solid fa-folder-open"></i> افزودن از فایل متنی (.txt)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- QR Code Modal -->
+        <div id="qrCodeModal" class="modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-qrcode"></i> QR Code</h3>
+                <button class="close-modal-btn" data-modal-id="qrCodeModal">&times;</button>
+            </div>
+            <div class="modal-body qr-container">
+                <img id="qrCodeImage" alt="QR Code" />
+                <p id="qrCodeName"></p>
+            </div>
+        </div>
+
+        <!-- FEATURE: Custom Confirm Modal (replaces native confirm) -->
+        <div id="confirmModal" class="modal small-modal">
+            <div class="modal-header">
+                <h3 id="confirmTitle"></h3>
+                <button class="close-modal-btn" data-modal-id="confirmModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage"></p>
+                <div class="modal-actions">
+                    <button id="confirmCancelBtn" class="secondary-btn">لغو</button>
+                    <button id="confirmOkBtn" class="danger-btn">تایید</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FEATURE: Custom Prompt Modal (replaces native prompt) -->
+        <div id="promptModal" class="modal">
+            <div class="modal-header">
+                <h3 id="promptTitle"></h3>
+                <button class="close-modal-btn" data-modal-id="promptModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="promptMessage"></p>
+                <input type="text" id="promptInput">
+                <div class="modal-actions">
+                    <button id="promptCancelBtn" class="secondary-btn">لغو</button>
+                    <button id="promptOkBtn" class="primary-btn">تایید</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Context Menu (Right-click menu) -->
+    <div id="contextMenu" class="context-menu"></div>
+
+    <!-- FEATURE: Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Main renderer script -->
+    <script src="./renderer.js"></script>
+</body>
+</html>
