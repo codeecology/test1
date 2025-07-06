@@ -416,61 +416,62 @@ async function runXrayTest(config, settings, testType, port, testLogicCallback) 
 
 const isTesting = () => activeTestProcesses.size > 0;
 
-ipcMain.on('test:start', (event, { configs, settings, groupId }) => { // Added groupId
+ipcMain.on('test:start', (event, { configs, settings, groupId }) => {
     if (isTesting()) {
         const isStandardTestRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith('_standard'));
         if (isStandardTestRunning) {
-            console.warn("[Main] Standard test is already running.");
-            mainWindow.webContents.send('test:finish'); // Notify UI test isn't starting
+            console.warn("[Main] Standard test is already running (standard tests).");
+            mainWindow.webContents.send('test:finish', { testType: 'standard' });
             return;
         }
     }
 
     let allConfigsFromStore = store.get('configs', []);
-    let configsToTest;
+    let effectiveConfigsToTest;
 
     if (groupId && groupId !== 'all' && groupId !== 'healthy_configs' && groupId !== 'favorite_configs') {
-        // If a specific group ID is provided, filter all configs from the store by this group ID
-        configsToTest = allConfigsFromStore.filter(c => c.groupId === groupId && c.status !== 'testing');
-        if (isDev) console.log(`[Main] Starting test for group ID: ${groupId}. Configs to test: ${configsToTest.length}`);
+        effectiveConfigsToTest = allConfigsFromStore.filter(c => c.groupId === groupId && c.status !== 'testing');
+        if (isDev) console.log(`[Main] Test for group ID: ${groupId}. Filtered ${effectiveConfigsToTest.length} configs.`);
     } else {
-        // Fallback to using the configs array passed from renderer (which might be filtered by view or search)
-        // This also covers 'all', 'healthy_configs', 'favorite_configs' if renderer sends appropriately filtered lists.
-        configsToTest = [...configs].filter(c => c.status !== 'testing');
-        if (isDev) console.log(`[Main] Starting test for provided config list. Configs to test: ${configsToTest.length}`);
+        effectiveConfigsToTest = [...configs].filter(c => c.status !== 'testing');
+        if (isDev) console.log(`[Main] Test for provided list. Filtered ${effectiveConfigsToTest.length} configs.`);
     }
 
-    if (configsToTest.length === 0) {
-        console.log("[Main] No configs to test after filtering.");
-        mainWindow.webContents.send('test:finish'); // Notify UI if no configs to test
+    if (effectiveConfigsToTest.length === 0) {
+        console.log("[Main] No configs to test after all filters.");
+        mainWindow.webContents.send('test:finish', { testType: 'standard' });
         return;
     }
 
     let completedCount = 0;
-    const totalToTest = configsToTest.length;
+    const totalToTest = effectiveConfigsToTest.length;
 
     mainWindow.webContents.send('test:progress', { progress: 0, total: totalToTest, completed: 0 });
 
+    let queueForStandardTest = [...effectiveConfigsToTest];
 
-    const runSingleStandardTest = async (config) => {
-        const port = 11000 + Math.floor(Math.random() * 10000); // Port range for standard tests
-
-        const result = await runXrayTest(config, settings, 'standard', port, async (agent, currentSettings) => {
+    const runSingleStandardTestInternal = async (configParam) => {
+        const port = 11000 + Math.floor(Math.random() * 10000);
+        const result = await runXrayTest(configParam, settings, 'standard', port, async (agent, currentSettings) => {
             const startTime = Date.now();
-            const response = await axios.get(currentSettings.testUrl, {
-                httpAgent: agent, httpsAgent: agent, timeout: currentSettings.testTimeout * 1000
-            });
-            if (response.status >= 200 && response.status < 300) {
-                return { delay: Date.now() - startTime };
-            } else {
-                return { delay: -1, error: `Status ${response.status}` };
+            try {
+                const response = await axios.get(currentSettings.testUrl, {
+                    httpAgent: agent, httpsAgent: agent, timeout: currentSettings.testTimeout * 1000
+                });
+                if (response.status >= 200 && response.status < 300) {
+                    return { delay: Date.now() - startTime };
+                } else {
+                    return { delay: -1, error: `Status ${response.status}` };
+                }
+            } catch (axiosError) {
+                return { delay: -1, error: axiosError.message || 'Request failed' };
             }
         });
 
         if (result.success) {
-            mainWindow.webContents.send('test:result', { id: config.id, delay: result.delay, error: result.error, testType: 'standard' });
+            mainWindow.webContents.send('test:result', { id: configParam.id, delay: result.delay, error: result.error, testType: 'standard' });
         } else {
-            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: result.error, testType: 'standard' });
+            mainWindow.webContents.send('test:result', { id: configParam.id, delay: -1, error: result.error, testType: 'standard' });
         }
 
         completedCount++;
@@ -478,49 +479,70 @@ ipcMain.on('test:start', (event, { configs, settings, groupId }) => { // Added g
     };
 
     const pool = new Set();
-    function runNextInQueue() {
-        while (pool.size < settings.concurrentTests && configsToTest.length > 0) {
-            const config = configsToTest.shift();
-            const promise = runSingleStandardTest(config).finally(() => {
+    function runNextInStandardQueue() {
+        while (pool.size < settings.concurrentTests && queueForStandardTest.length > 0) {
+            const configToRun = queueForStandardTest.shift();
+            const promise = runSingleStandardTestInternal(configToRun).finally(() => {
                 pool.delete(promise);
-                if (isTesting() && activeTestProcesses.size > 0) runNextInQueue();
+                if (queueForStandardTest.length > 0 || pool.size > 0) {
+                    runNextInStandardQueue();
+                } else if (completedCount === totalToTest) {
+                    mainWindow.webContents.send('test:finish', { testType: 'standard' });
+                    if(isDev) console.log("[Main] Standard Test sequence finished (all processed).");
+                }
             });
             pool.add(promise);
         }
-        if (configsToTest.length === 0 && pool.size === 0) {
-            mainWindow.webContents.send('test:finish');
+        if (queueForStandardTest.length === 0 && pool.size === 0 && completedCount === totalToTest && totalToTest > 0) {
+            mainWindow.webContents.send('test:finish', { testType: 'standard' });
+            if(isDev) console.log("[Main] Standard Test sequence finished (queue empty, pool empty).");
+        } else if (totalToTest > 0 && queueForStandardTest.length === 0 && pool.size === 0 && completedCount < totalToTest) {
+            console.warn(`[Main] Standard Test: Queue and pool are empty, but not all tests completed. Completed: ${completedCount}/${totalToTest}. Forcing finish.`);
+            mainWindow.webContents.send('test:finish', { testType: 'standard' });
         }
     }
-    runNextInQueue();
+    runNextInStandardQueue();
 });
 
 ipcMain.on('test:stop', stopAllTests);
 function stopAllTests() {
     activeTestProcesses.forEach(proc => { if (!proc.killed) proc.kill(); });
     activeTestProcesses.clear();
-    mainWindow.webContents.send('test:finish');
+    mainWindow.webContents.send('test:finish', { testType: 'all_stopped' });
+    if(isDev) console.log("[Main] All tests stopped by user.");
 }
 
 // IPC Handler for Real Delay Test (Phase 2 - Network Logic)
 ipcMain.on('test:real-delay', async (event, { configs, settings }) => {
     if (isDev) {
         console.log(`[Main] Received 'test:real-delay' for ${configs.length} configs.`);
-        console.log('[Main] Real Delay Test Settings:', settings.realDelayTestUrl, settings.realDelayTestPings, settings.realDelayTestTimeout);
+    }
+    const isRealDelayTestRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith('_real-delay'));
+    if (isRealDelayTestRunning) {
+        console.warn("[Main] A Real Delay test sequence is already in progress.");
+        mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
+        return;
     }
 
-    const { realDelayTestUrl, realDelayTestPings, realDelayTestTimeout } = settings;
+    let configsToTest = [...configs].filter(c => !Array.from(activeTestProcesses.keys()).some(key => key.startsWith(c.id)));
+    if (configsToTest.length === 0) {
+        console.log("[Main] No configs for Real Delay test after filtering.");
+        mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
+        return;
+    }
+
     let completedCount = 0;
-    const totalToTest = configs.length;
-    mainWindow.webContents.send('test:progress', { progress: 0, total: totalToTest, completed: 0 });
+    const totalToTest = configsToTest.length;
+    mainWindow.webContents.send('test:progress', { testType: 'real-delay', progress: 0, total: totalToTest, completed: 0 });
 
-    const runSingleRealDelayTest = async (config) => {
-        const port = 21000 + Math.floor(Math.random() * 10000); // Port range for real delay tests
+    let queueForRealDelayTest = [...configsToTest];
 
-        const result = await runXrayTest(config, settings, 'real-delay', port, async (agent, currentSettings) => {
+    const runSingleRealDelayTestInternal = async (configParam) => {
+        const port = 21000 + Math.floor(Math.random() * 10000);
+        const result = await runXrayTest(configParam, settings, 'real-delay', port, async (agent, currentSettings) => {
             let totalDelay = 0;
             let successfulPings = 0;
             let firstError = null;
-
             for (let i = 0; i < currentSettings.realDelayTestPings; i++) {
                 const startTime = Date.now();
                 try {
@@ -530,12 +552,11 @@ ipcMain.on('test:real-delay', async (event, { configs, settings }) => {
                     totalDelay += (Date.now() - startTime);
                     successfulPings++;
                 } catch (pingError) {
-                    if (isDev) console.warn(`Real delay ping ${i + 1} failed for ${config.name}: ${pingError.message}`);
+                    if (isDev) console.warn(`Real delay ping ${i + 1} for ${configParam.name} failed: ${pingError.message}`);
                     if (!firstError) firstError = pingError.message || 'Ping failed';
                 }
                 if (i < currentSettings.realDelayTestPings - 1) await new Promise(resolve => setTimeout(resolve, 100));
             }
-
             if (successfulPings > 0) {
                 return { delay: Math.round(totalDelay / successfulPings) };
             } else {
@@ -544,50 +565,85 @@ ipcMain.on('test:real-delay', async (event, { configs, settings }) => {
         });
 
         if (result.success) {
-            mainWindow.webContents.send('test:result', { id: config.id, delay: result.delay, error: result.error, testType: 'real-delay' });
+            mainWindow.webContents.send('test:result', { id: configParam.id, delay: result.delay, error: result.error, testType: 'real-delay' });
         } else {
-            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: result.error, testType: 'real-delay' });
+            mainWindow.webContents.send('test:result', { id: configParam.id, delay: -1, error: result.error, testType: 'real-delay' });
         }
-
         completedCount++;
-        mainWindow.webContents.send('test:progress', { progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
-        if (completedCount === totalToTest) {
-            mainWindow.webContents.send('test:finish');
-            if(isDev) console.log("[Main] Real Delay Test sequence finished.");
-        }
+        mainWindow.webContents.send('test:progress', { testType: 'real-delay', progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
     };
 
-    (async () => {
-        for (const config of configs) {
-            if (!isTesting()) { // Check if main testing flag was turned off (e.g. by stopAllTests)
-                console.log("[Main] Real delay test loop interrupted by stop signal.");
-                break;
+    const pool = new Set();
+    const concurrentRealDelayTests = Math.max(1, Math.min(settings.concurrentTests, 3)); // Ensure at least 1, max 3 or user setting
+
+    function runNextInRealDelayQueue() {
+        while (pool.size < concurrentRealDelayTests && queueForRealDelayTest.length > 0) {
+            if (!isTesting() && pool.size === 0) {
+                 console.log("[Main] Real Delay test stopped externally.");
+                 mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
+                 return;
             }
-            await runSingleRealDelayTest(config);
+            const configToRun = queueForRealDelayTest.shift();
+            const promise = runSingleRealDelayTestInternal(configToRun).finally(() => {
+                pool.delete(promise);
+                if (queueForRealDelayTest.length > 0 || pool.size > 0) {
+                    if(isTesting() || queueForRealDelayTest.length > 0) runNextInRealDelayQueue();
+                    else if (pool.size === 0 && completedCount === totalToTest) {
+                         mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
+                         if (isDev) console.log("[Main] Real Delay Test sequence finished (all processed, pool emptied).");
+                    }
+                } else if (completedCount === totalToTest) {
+                    mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
+                    if (isDev) console.log("[Main] Real Delay Test sequence finished (all processed).");
+                }
+            });
+            pool.add(promise);
         }
-    })();
+        if (queueForRealDelayTest.length === 0 && pool.size === 0 && completedCount === totalToTest && totalToTest > 0) {
+            mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
+            if (isDev) console.log("[Main] Real Delay Test sequence finished (queue empty, pool empty).");
+        } else if (totalToTest > 0 && queueForRealDelayTest.length === 0 && pool.size === 0 && completedCount < totalToTest) {
+            console.warn(`[Main] Real Delay Test: Queue and pool are empty, but not all tests completed. Completed: ${completedCount}/${totalToTest}. Forcing finish.`);
+            mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
+        }
+    }
+    runNextInRealDelayQueue();
 });
 
 ipcMain.on('test:speed', async (event, { configs, settings }) => {
     if (isDev) {
         console.log(`[Main] Received 'test:speed' for ${configs.length} configs.`);
-        console.log('[Main] Speed Test Settings:', settings.speedTestFileUrl);
     }
+    const isSpeedTestRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith('_speed'));
+    if (isSpeedTestRunning) {
+        console.warn("[Main] A Speed test sequence is already in progress.");
+        mainWindow.webContents.send('test:finish', { testType: 'speed' });
+        return;
+    }
+
+    let configsToTest = [...configs].filter(c => !Array.from(activeTestProcesses.keys()).some(key => key.startsWith(c.id)));
+    if (configsToTest.length === 0) {
+        console.log("[Main] No configs for Speed test after filtering.");
+        mainWindow.webContents.send('test:finish', { testType: 'speed' });
+        return;
+    }
+
     let completedCount = 0;
-    const totalToTest = configs.length;
-    mainWindow.webContents.send('test:progress', { progress: 0, total: totalToTest, completed: 0 });
+    const totalToTest = configsToTest.length;
+    mainWindow.webContents.send('test:progress', { testType: 'speed', progress: 0, total: totalToTest, completed: 0 });
 
-    const runSingleSpeedTest = async (config) => {
-        const port = 31000 + Math.floor(Math.random() * 10000); // Port range for speed tests
+    let queueForSpeedTest = [...configsToTest];
 
-        const result = await runXrayTest(config, settings, 'speed', port, async (agent, currentSettings) => {
+    const runSingleSpeedTestInternal = async (configParam) => {
+        const port = 31000 + Math.floor(Math.random() * 10000);
+        const result = await runXrayTest(configParam, settings, 'speed', port, async (agent, currentSettings) => {
             const startTime = Date.now();
             let fileSize = 0;
             try {
                 const response = await axios.get(currentSettings.speedTestFileUrl, {
                     httpAgent: agent, httpsAgent: agent,
                     responseType: 'arraybuffer',
-                    timeout: currentSettings.testTimeout * 1000 * 2, // Longer timeout for speed test
+                    timeout: currentSettings.testTimeout * 1000 * 2,
                     onDownloadProgress: (progressEvent) => {
                         if (progressEvent.total) fileSize = progressEvent.total;
                         else if (progressEvent.loaded) fileSize = progressEvent.loaded;
@@ -602,37 +658,58 @@ ipcMain.on('test:speed', async (event, { configs, settings }) => {
                     const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
                     return { downloadSpeed: parseFloat(speedMbps) };
                 } else {
-                    throw new Error('Invalid duration or file size.');
+                    throw new Error('Invalid duration or file size for speed test.');
                 }
             } catch (dlError) {
-                if (isDev) console.warn(`Speed test download failed for ${config.name}: ${dlError.message}`);
+                if (isDev) console.warn(`Speed test download for ${configParam.name} failed: ${dlError.message}`);
                 return { downloadSpeed: -1, error: dlError.message || 'Download failed' };
             }
         });
 
         if (result.success) {
-            mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: result.downloadSpeed, error: result.error, testType: 'speed' });
+            mainWindow.webContents.send('test:result', { id: configParam.id, downloadSpeed: result.downloadSpeed, error: result.error, testType: 'speed' });
         } else {
-            mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: result.error, testType: 'speed' });
+            mainWindow.webContents.send('test:result', { id: configParam.id, downloadSpeed: -1, error: result.error, testType: 'speed' });
         }
-
         completedCount++;
-        mainWindow.webContents.send('test:progress', { progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
-        if (completedCount === totalToTest) {
-            mainWindow.webContents.send('test:finish');
-            if(isDev) console.log("[Main] Speed Test sequence finished.");
-        }
+        mainWindow.webContents.send('test:progress', { testType: 'speed', progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
     };
 
-    (async () => {
-        for (const config of configs) {
-            if (!isTesting()) {
-                console.log("[Main] Speed test loop interrupted by stop signal.");
-                break;
+    const pool = new Set();
+    const concurrentSpeedTests = Math.max(1, Math.min(settings.concurrentTests, 2)); // Example: limit to 2 concurrent speed tests
+
+    function runNextInSpeedQueue() {
+        while (pool.size < concurrentSpeedTests && queueForSpeedTest.length > 0) {
+            if (!isTesting() && pool.size === 0) {
+                 console.log("[Main] Speed test stopped externally.");
+                 mainWindow.webContents.send('test:finish', { testType: 'speed' });
+                 return;
             }
-            await runSingleSpeedTest(config);
+            const configToRun = queueForSpeedTest.shift();
+            const promise = runSingleSpeedTestInternal(configToRun).finally(() => {
+                pool.delete(promise);
+                if (queueForSpeedTest.length > 0 || pool.size > 0) {
+                    if(isTesting() || queueForSpeedTest.length > 0) runNextInSpeedQueue();
+                    else if (pool.size === 0 && completedCount === totalToTest) {
+                        mainWindow.webContents.send('test:finish', { testType: 'speed' });
+                        if (isDev) console.log("[Main] Speed Test sequence finished (all processed, pool emptied).");
+                    }
+                } else if (completedCount === totalToTest) {
+                    mainWindow.webContents.send('test:finish', { testType: 'speed' });
+                    if (isDev) console.log("[Main] Speed Test sequence finished (all processed).");
+                }
+            });
+            pool.add(promise);
         }
-    })();
+        if (queueForSpeedTest.length === 0 && pool.size === 0 && completedCount === totalToTest && totalToTest > 0) {
+            mainWindow.webContents.send('test:finish', { testType: 'speed' });
+            if (isDev) console.log("[Main] Speed Test sequence finished (queue empty, pool empty).");
+        } else if (totalToTest > 0 && queueForSpeedTest.length === 0 && pool.size === 0 && completedCount < totalToTest) {
+            console.warn(`[Main] Speed Test: Queue and pool are empty, but not all tests completed. Completed: ${completedCount}/${totalToTest}. Forcing finish.`);
+            mainWindow.webContents.send('test:finish', { testType: 'speed' });
+        }
+    }
+    runNextInSpeedQueue();
 });
 
 

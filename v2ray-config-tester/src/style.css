@@ -1100,38 +1100,45 @@ html[dir="rtl"] .context-menu .submenu-arrow {
 /* --- Toast Notifications --- */
 .toast-container {
     position: fixed;
-    bottom: 20px; /* Adjusted */
-    left: 20px; /* LTR default */
+    bottom: 20px;
     z-index: 2000;
     display: flex;
     flex-direction: column;
-    gap: 10px; /* Adjusted */
+    gap: 10px;
 }
+
+/* Default LTR */
+html:not([dir="rtl"]) .toast-container {
+    left: 20px;
+}
+html:not([dir="rtl"]) .toast {
+    transform: translateX(-100%);
+}
+
+/* RTL */
 html[dir="rtl"] .toast-container {
-    left: auto;
     right: 20px;
+}
+html[dir="rtl"] .toast {
+    transform: translateX(100%);
 }
 
 .toast {
-    padding: 12px 20px; /* Adjusted */
-    border-radius: 6px; /* Standardized */
+    padding: 12px 20px;
+    border-radius: 6px;
     color: white;
-    box-shadow: var(--shadow-medium); /* Use defined */
+    box-shadow: var(--shadow-medium);
     display: flex;
     align-items: center;
-    gap: 8px; /* Adjusted */
-    font-size: 0.9em; /* Relative */
+    gap: 8px;
+    font-size: 0.9em;
     opacity: 0;
-    transform: translateX(-100%); /* LTR default for slide-in */
     transition: opacity 0.35s ease, transform 0.35s ease;
-}
-html[dir="rtl"] .toast {
-    transform: translateX(100%); /* RTL default for slide-in */
 }
 
 .toast.show {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(0); /* This should work for both LTR and RTL */
 }
 .toast.success { background-color: var(--success-color); }
 .toast.error { background-color: var(--error-color); }

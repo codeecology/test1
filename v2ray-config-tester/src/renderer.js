@@ -220,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
             add_to_favorites_ctx: "Add to Favorites",
             remove_from_favorites_ctx: "Remove from Favorites",
             toggle_favorite_ctx: "Toggle Favorite",
+            toast_all_tests_stopped_user: "All tests stopped by user.", // New
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -413,6 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
             save_notes: "ذخیره یادداشت",
             notes_saved_toast: "یادداشت‌ها ذخیره شد.",
             notes_placeholder: "یادداشت‌های خود را اینجا بنویسید...",
+            toast_all_tests_stopped_user: "تمام تست‌ها توسط کاربر متوقف شد.", // New
         }
     };
     const lang = (key, params = {}) => {
@@ -3191,24 +3193,61 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTestUI();
     });
 
-    window.api.onTestFinish(() => {
-        state.isTesting = false;
-        state.lastTestCompletionTime = new Date().toISOString();
-        saveAllData();
+    window.api.onTestFinish((args) => {
+        const testType = args ? args.testType : 'unknown';
+        if (isDev) console.log(`[Renderer] Test finish event received for type: ${testType}`);
 
-        state.configs.forEach(c => { if (c.status === 'testing') c.status = 'untested'; });
+        state.isTesting = false;
+
+        if (testType !== 'all_stopped') {
+            state.lastTestCompletionTime = new Date().toISOString();
+        }
+        // Avoid calling saveAllData here if only test states are changing,
+        // as test results will trigger saveAllData for history.
+        // However, lastTestCompletionTime is part of settings, so it should be saved.
+        if (state.settings.lastTestCompletionTime !== state.lastTestCompletionTime) {
+             saveAllData(); // Save if lastTestCompletionTime was updated
+        }
+
+
+        state.configs.forEach(c => {
+            if (c.status === 'testing') {
+                c.status = 'untested';
+            }
+        });
 
         renderTable();
         updateTestUI();
         updateStatusBar();
         updateDashboardStatsInStatusBar();
 
-        const totalConfigs = state.configs.length;
-        const healthyConfigs = state.configs.filter(c => c.status === 'healthy').length;
-        // Ensure this text is also localized if it's different from the onTestProgress one.
-        // For now, it seems covered by the onTestProgress at 100%.
-        // $('#progressText').textContent = `Test complete. Total: ${totalConfigs}, Healthy: ${healthyConfigs}`;
-        showToast(lang('toast_all_tests_finished'), 'success');
+        const progressBar = $('#progressBar');
+        const progressText = $('#progressText');
+
+        if (testType === 'all_stopped') {
+            showToast(lang('toast_all_tests_stopped_user') || "All tests stopped.", 'info'); // Add lang key toast_all_tests_stopped_user
+             if(progressBar) progressBar.value = 0;
+             if(progressText) { // Reset progress text to summary
+                const total = state.configs.length;
+                const healthy = state.configs.filter(c => c.status === 'healthy').length;
+                progressText.textContent = lang('test_complete_summary', { total, healthy });
+            }
+        } else if (testType !== 'unknown' && completedCountForType(testType) === totalToTestForType(testType)) {
+            // This logic is tricky here, as renderer doesn't directly track completedCount/totalToTest per type
+            // The onTestProgress handler is better suited for showing completion summary for a specific test type
+            // showToast(lang('toast_tests_finished_type', {type: testType}), 'success'); // Add lang key
+        }
+        // The main "All tests finished!" toast is shown by onTestProgress when progress hits 100% for a specific test type.
+        // If a generic 'test:finish' without full progress happens (e.g. no items to test),
+        // the progress bar should also be reset.
+        if (args && args.total === 0) { // If main process indicates no items were tested
+            if(progressBar) progressBar.value = 0;
+            if(progressText) {
+                const total = state.configs.length;
+                const healthy = state.configs.filter(c => c.status === 'healthy').length;
+                progressText.textContent = lang('test_complete_summary', { total, healthy });
+            }
+        }
     });
 
     window.api.onProxyStatusChange(({ isConnected, error }) => {
