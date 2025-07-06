@@ -501,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // This will be an array of keys, e.g., ['status', 'name', 'country', ...]
     const defaultColumnOrder = Object.keys(columnDefinitions).sort((a, b) => columnDefinitions[a].defaultOrder - columnDefinitions[b].defaultOrder);
 
-    const initializeColumnSettings = () => {
+    const initializeColumnVisibility = () => { // Renamed function
         if (!state.settings.columnVisibility) {
             state.settings.columnVisibility = {};
         }
@@ -532,7 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!container) return;
         container.innerHTML = ''; // Clear old checkboxes
 
-        initializeColumnVisibility(); // Ensure defaults are set
+        initializeColumnVisibility(); // Ensure defaults are set (call uses new name)
 
         columnDefinitions.forEach(col => {
             const div = document.createElement('div');
@@ -555,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const applyColumnVisibility = () => {
-        initializeColumnVisibility(); // Ensure settings are initialized
+        initializeColumnVisibility(); // Ensure settings are initialized (call uses new name)
 
         const table = $('#configsTable');
         if (!table) return;
@@ -969,7 +969,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const link of linksArray) {
             // Global duplicate check still applies
             if (!link || !/^(vless|vmess|trojan|ss):\/\//.test(link) || existingLinks.has(link)) {
-                if (existingLinks.has(link) && isDev) {
+                if (existingLinks.has(link)) { // Log duplicate warning always in renderer, as it's a user action consequence
                     console.warn(`Skipping duplicate config link (globally): ${link}`);
                 }
                 continue;
@@ -1012,11 +1012,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const hostForCountryLookup = address; // Prefer address from parsed details
                     if (hostForCountryLookup) {
-                        if(isDev) console.log(`[processAndAddConfigs] Getting country for host: ${hostForCountryLookup}`);
+                        console.log(`[processAndAddConfigs] Getting country for host: ${hostForCountryLookup}`); // Log always
                         country = await window.api.getCountry(hostForCountryLookup);
-                        if(isDev) console.log(`[processAndAddConfigs] Got country: ${country} for host: ${hostForCountryLookup}`);
+                        console.log(`[processAndAddConfigs] Got country: ${country} for host: ${hostForCountryLookup}`); // Log always
                     } else {
-                        if(isDev) console.warn(`[processAndAddConfigs] No valid hostname/address for country lookup from parsed details: ${link}`);
+                        console.warn(`[processAndAddConfigs] No valid hostname/address for country lookup from parsed details: ${link}`);
                     }
                 } catch (countryError) {
                     console.warn(`[processAndAddConfigs] Failed to get country for ${address || parsedUrlForNameFragment.hostname}:`, countryError.message);
