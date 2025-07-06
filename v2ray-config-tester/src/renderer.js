@@ -34,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
             start_test: "Start Test", stop_test: "Stop Test", status: "Status", name: "Name", group: "Group", country: "Country",
             protocol: "Protocol", network: "Network", delay: "Delay", port: "Port", details: "Details", connect: "Connect", disconnect: "Disconnect",
             not_connected: "Not Connected", connecting: "Connecting...", connected_to: "Connected to", settings: "Settings",
+            test_group: "Test Group: {groupName}", // New translation
+            test_visible: "Test Visible", // New translation for testing visible configs
             untested: "Untested", testing: "Testing", healthy: "Healthy", unhealthy: "Unhealthy", error: "Error",
             test_selected: "Test Selected", copy_link: "Copy Link", assign_to_group: "Assign to Group",
             show_qr_code: "Show QR Code", delete: "Delete", edit_name: "Edit Name",
@@ -224,6 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
             start_test: "شروع تست", stop_test: "توقف تست", status: "وضعیت", name: "نام", group: "گروه", country: "کشور",
             protocol: "پروتکل", network: "شبکه", delay: "تأخیر", port: "پورت", details: "جزئیات", connect: "اتصال", disconnect: "قطع اتصال",
             not_connected: "متصل نیستید", connecting: "در حال اتصال...", connected_to: "متصل به", settings: "تنظیمات",
+            test_group: "تست گروه: {groupName}", // ترجمه جدید
+            test_visible: "تست قابل مشاهده‌ها", // ترجمه جدید
             untested: "تست نشده", testing: "در حال تست", healthy: "سالم", unhealthy: "ناسالم", error: "خطا",
             test_selected: "تست منتخب‌ها", copy_link: "کپی لینک", assign_to_group: "اختصاص به گروه",
             show_qr_code: "نمایش QR Code", delete: "حذف", edit_name: "ویرایش نام",
@@ -429,6 +433,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return 'N/A';
         }
         return `${delayValue} ms`;
+    };
+
+    const getStatusIconClass = (status) => {
+        switch (status) {
+            case 'healthy':
+                return 'fa-solid fa-circle-check'; // Green check
+            case 'unhealthy':
+                return 'fa-solid fa-circle-xmark'; // Red x
+            case 'error':
+                return 'fa-solid fa-triangle-exclamation'; // Yellow warning triangle
+            case 'testing':
+                return 'fa-solid fa-spinner fa-spin'; // Spinning animation
+            case 'untested':
+            default:
+                return 'fa-solid fa-circle-question'; // Question mark
+        }
     };
 
     const formatDetails = (config) => {
@@ -761,26 +781,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const statusCell = cells[1];
                 const statusIndicator = statusCell.querySelector('.status-indicator');
-                const statusText = statusCell.querySelector('span:last-child');
+                const statusIconElement = statusCell.querySelector('.status-icon'); // New
+                const statusText = statusCell.querySelector('.status-text'); // Changed selector for clarity
                 const favoriteIcon = statusCell.querySelector('.favorite-toggle-icon');
 
+                const newStatus = config.status || 'untested';
+                const statusIconClass = getStatusIconClass(newStatus); // Helper function needed
 
-                if (statusIndicator && statusText) {
+                if (statusIndicator && statusText && statusIconElement) {
                     const currentStatusClass = statusIndicator.className.match(/status-\S+/)?.[0];
-                    const newStatusClass = `status-${config.status || 'untested'}`;
-                    if (currentStatusClass !== newStatusClass) {
+                    const newIndicatorClass = `status-${newStatus}`;
+                    if (currentStatusClass !== newIndicatorClass) {
                         if (currentStatusClass) statusIndicator.classList.remove(currentStatusClass);
-                        statusIndicator.classList.add(newStatusClass);
+                        statusIndicator.classList.add(newIndicatorClass);
                     }
-                    if (!statusIndicator.classList.contains('status-indicator')) { // Ensure base class
+                    if (!statusIndicator.classList.contains('status-indicator')) {
                         statusIndicator.classList.add('status-indicator');
                     }
-                    statusText.textContent = formatStatus(config.status);
+                    statusIconElement.className = `status-icon ${statusIconClass}`; // Update icon class
+                    statusText.textContent = formatStatus(newStatus);
                 } else {
-                    statusCell.innerHTML = `<span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span><i class="favorite-toggle-icon ${config.isFavorite ? 'fa-solid' : 'fa-regular'} fa-star" title="${lang('toggle_favorite_ctx')}"></i>`;
+                    // Regenerate innerHTML if elements are missing (e.g., on first render of a new row)
+                    statusCell.innerHTML = `
+                        <i class="favorite-toggle-icon ${config.isFavorite ? 'fa-solid' : 'fa-regular'} fa-star" title="${lang('toggle_favorite_ctx')}"></i>
+                        <span class="status-indicator status-${newStatus}"></span>
+                        <i class="status-icon ${statusIconClass}"></i>
+                        <span class="status-text">${formatStatus(newStatus)}</span>`;
                 }
 
-                if (favoriteIcon) { // Update existing favorite icon
+                // Ensure favorite icon is correctly updated or added if it was missing from the else block above
+                const currentFavoriteIcon = statusCell.querySelector('.favorite-toggle-icon'); // Re-query in case innerHTML changed
+                if (currentFavoriteIcon) {
                     favoriteIcon.className = `favorite-toggle-icon ${config.isFavorite ? 'fa-solid' : 'fa-regular'} fa-star`;
                     favoriteIcon.title = config.isFavorite ? lang('remove_from_favorites_ctx') : lang('add_to_favorites_ctx');
                 }
@@ -810,7 +841,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="status-cell">
                         <i class="favorite-toggle-icon ${config.isFavorite ? 'fa-solid' : 'fa-regular'} fa-star" title="${config.isFavorite ? lang('remove_from_favorites_ctx') : lang('add_to_favorites_ctx')}"></i>
                         <span class="status-indicator status-${config.status || 'untested'}"></span>
-                        <span>${formatStatus(config.status)}</span>
+                        <i class="status-icon ${getStatusIconClass(config.status || 'untested')}"></i>
+                        <span class="status-text">${formatStatus(config.status || 'untested')}</span>
                     </td>
                     <td title="${config.name}">${config.name}</td>
                     <td class="country-cell">${countryText}</td>
@@ -972,9 +1004,28 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateTestUI = () => {
-        $('#startTestBtn').style.display = state.isTesting ? 'none' : 'inline-flex';
-        $('#stopTestBtn').style.display = state.isTesting ? 'inline-flex' : 'none';
-        $('#stopTestBtn').disabled = !state.isTesting;
+        const startTestBtn = $('#startTestBtn');
+        const stopTestBtn = $('#stopTestBtn');
+
+        if (startTestBtn) {
+            startTestBtn.style.display = state.isTesting ? 'none' : 'inline-flex';
+            if (!state.isTesting) {
+                // Update button text based on active group
+                const activeGroup = state.groups.find(g => g.id === state.activeGroupId);
+                if (activeGroup) { // User-defined group
+                    startTestBtn.textContent = lang('test_group', { groupName: activeGroup.name });
+                } else if (state.activeGroupId === 'all' || state.activeGroupId === 'favorite_configs' || state.activeGroupId === 'healthy_configs') {
+                    startTestBtn.textContent = lang('test_visible');
+                } else {
+                    startTestBtn.textContent = lang('start_test'); // Default
+                }
+            }
+        }
+        if (stopTestBtn) {
+            stopTestBtn.style.display = state.isTesting ? 'inline-flex' : 'none';
+            stopTestBtn.disabled = !state.isTesting;
+            if(state.isTesting) stopTestBtn.textContent = lang('stop_test');
+        }
     };
     
     const updateLangUI = () => {
@@ -2372,21 +2423,53 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handleStartTest = () => {
-        if (state.isTesting) return;
-        const configsToTest = getVisibleConfigs().filter(c => c.status !== 'testing');
-        if (configsToTest.length === 0) {
-            showToast(lang('toast_no_configs_to_test'), 'info');
+        if (state.isTesting) {
+            showToast(lang('toast_test_already_running'), 'warning');
             return;
         }
-        state.isTesting = true;
-        configsToTest.forEach(c => c.status = 'testing'); // Mark as testing
-        renderTable(); // Update UI to show "testing" status
-        updateTestUI();
-        // Reset progress bar if you have one
-        $('#progressBar').style.width = '0%';
-        $('#progressText').textContent = `Testing 0/${configsToTest.length}`;
 
-        window.api.startTests({ configs: configsToTest, settings: state.settings });
+        let configsToTest = [];
+        let groupIdToSend = null;
+
+        const activeUserGroup = state.groups.find(g => g.id === state.activeGroupId);
+
+        if (activeUserGroup) {
+            // A specific user-defined group is active, send its ID
+            // main.js will fetch all configs for this group from the store.
+            // We still need to provide a 'configs' array, but it can be minimal or ignored by main.js if groupId is present.
+            // For simplicity and consistency, let's send the visible configs of that group.
+            // Or, if main.js is set to *always* re-fetch by groupId, this 'configs' array is less critical.
+            // Based on the main.js change, if groupId is present, 'configs' passed from here is not the primary source.
+            // So, we can send an empty array for 'configs' when groupId is set.
+            // However, to keep track of totalToTest for progress bar locally, it's better if renderer knows the count.
+            // Let's have renderer determine the configs to test for the group.
+            configsToTest = state.configs.filter(c => c.groupId === state.activeGroupId && c.status !== 'testing');
+            groupIdToSend = state.activeGroupId; // Send the group ID
+            if (configsToTest.length === 0) {
+                showToast(lang('toast_no_configs_to_test') + (activeUserGroup ? ` in group "${activeUserGroup.name}"` : ""), 'info');
+                return;
+            }
+            console.log(`Starting test for group: ${activeUserGroup.name}, ID: ${groupIdToSend}, Configs: ${configsToTest.length}`);
+        } else {
+            // Testing 'all', 'favorites', 'healthy', or search results (visible configs)
+            configsToTest = getVisibleConfigs().filter(c => c.status !== 'testing');
+            if (configsToTest.length === 0) {
+                showToast(lang('toast_no_configs_to_test'), 'info');
+                return;
+            }
+            console.log(`Starting test for visible configs. Count: ${configsToTest.length}`);
+        }
+
+        state.isTesting = true;
+        configsToTest.forEach(c => { c.status = 'testing'; });
+        renderTable();
+        updateTestUI();
+
+        $('#progressBar').value = 0; // Assuming #progressBar is a <progress> element or similar
+        $('#progressText').textContent = lang('testing_progress', { completed: 0, total: configsToTest.length, progress: 0 });
+
+        // Send the determined configs and potentially the groupId
+        window.api.startTests({ configs: configsToTest, settings: state.settings, groupId: groupIdToSend });
     };
 
     const handleConnectToggle = () => {

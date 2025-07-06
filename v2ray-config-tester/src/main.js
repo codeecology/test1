@@ -32,6 +32,18 @@ const iconPath = path.join(__dirname, '..', 'assets', 'icon.ico');
 
 // --- App Lifecycle ---
 app.on('ready', () => {
+    // Verify Xray path before creating window or tray
+    if (!fs.existsSync(xrayPath)) {
+        dialog.showErrorBox(
+            'Xray Core Missing',
+            `Xray executable not found at ${xrayPath}. Please ensure it's correctly placed in the 'core' directory.`
+        );
+        // Consider whether to app.quit() here or let the user attempt to fix it while app is open (partially).
+        // For now, we'll prevent further initialization if Xray is critical.
+        app.quit();
+        return; // Stop further execution in 'ready'
+    }
+
     createWindow();
     createTray();
 });
@@ -404,15 +416,36 @@ async function runXrayTest(config, settings, testType, port, testLogicCallback) 
 
 const isTesting = () => activeTestProcesses.size > 0;
 
-ipcMain.on('test:start', (event, { configs, settings }) => {
-    if (isTesting()) { // Basic check, more granular control might be needed if multiple test types can run
+ipcMain.on('test:start', (event, { configs, settings, groupId }) => { // Added groupId
+    if (isTesting()) {
         const isStandardTestRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith('_standard'));
         if (isStandardTestRunning) {
             console.warn("[Main] Standard test is already running.");
+            mainWindow.webContents.send('test:finish'); // Notify UI test isn't starting
             return;
         }
     }
-    let configsToTest = [...configs];
+
+    let allConfigsFromStore = store.get('configs', []);
+    let configsToTest;
+
+    if (groupId && groupId !== 'all' && groupId !== 'healthy_configs' && groupId !== 'favorite_configs') {
+        // If a specific group ID is provided, filter all configs from the store by this group ID
+        configsToTest = allConfigsFromStore.filter(c => c.groupId === groupId && c.status !== 'testing');
+        if (isDev) console.log(`[Main] Starting test for group ID: ${groupId}. Configs to test: ${configsToTest.length}`);
+    } else {
+        // Fallback to using the configs array passed from renderer (which might be filtered by view or search)
+        // This also covers 'all', 'healthy_configs', 'favorite_configs' if renderer sends appropriately filtered lists.
+        configsToTest = [...configs].filter(c => c.status !== 'testing');
+        if (isDev) console.log(`[Main] Starting test for provided config list. Configs to test: ${configsToTest.length}`);
+    }
+
+    if (configsToTest.length === 0) {
+        console.log("[Main] No configs to test after filtering.");
+        mainWindow.webContents.send('test:finish'); // Notify UI if no configs to test
+        return;
+    }
+
     let completedCount = 0;
     const totalToTest = configsToTest.length;
 
@@ -448,7 +481,7 @@ ipcMain.on('test:start', (event, { configs, settings }) => {
     function runNextInQueue() {
         while (pool.size < settings.concurrentTests && configsToTest.length > 0) {
             const config = configsToTest.shift();
-            const promise = runSingleTest(config).finally(() => {
+            const promise = runSingleStandardTest(config).finally(() => {
                 pool.delete(promise);
                 if (isTesting() && activeTestProcesses.size > 0) runNextInQueue();
             });
@@ -821,11 +854,17 @@ function parseConfigLink(link, port) { // port argument is for the inbound SOCKS
         switch (protocol) {
             case 'vless':
                 if (!url.username) {
-                    console.error(`Parse Error (VLESS): User ID (UUID) is missing in link: ${link}`);
+                    // console.error(`Parse Error (VLESS): User ID (UUID) is missing in link: ${link}`); // Kept for dev debug if needed
                     return { success: false, error: "Invalid VLESS link: User ID (UUID) is missing." };
                 }
-                if (!url.hostname) return { success: false, error: "Invalid VLESS link: Address (hostname) is missing." };
-                if (!url.port) return { success: false, error: "Invalid VLESS link: Port is missing." };
+                if (!url.hostname) {
+                    // console.error(`Parse Error (VLESS): Address (hostname) is missing in link: ${link}`);
+                    return { success: false, error: "Invalid VLESS link: Address (hostname) is missing." };
+                }
+                if (!url.port) {
+                    // console.error(`Parse Error (VLESS): Port is missing in link: ${link}`);
+                    return { success: false, error: "Invalid VLESS link: Port is missing." };
+                }
 
                 outbound.settings.vnext = [{
                     address: url.hostname,
@@ -870,15 +909,15 @@ function parseConfigLink(link, port) { // port argument is for the inbound SOCKS
                 break;
             case 'trojan':
                 if (!url.password && !url.username) {
-                    console.error(`Parse Error (Trojan): Password is missing in link: ${link}`);
+                    // console.error(`Parse Error (Trojan): Password is missing in link: ${link}`);
                     return { success: false, error: "Invalid Trojan link: Password is missing." };
                 }
                 if (!url.hostname) {
-                     console.error(`Parse Error (Trojan): Address (hostname) is missing in link: ${link}`);
+                    // console.error(`Parse Error (Trojan): Address (hostname) is missing in link: ${link}`);
                     return { success: false, error: "Invalid Trojan link: Address (hostname) is missing." };
                 }
                 if (!url.port) {
-                    console.error(`Parse Error (Trojan): Port is missing in link: ${link}`);
+                    // console.error(`Parse Error (Trojan): Port is missing in link: ${link}`);
                     return { success: false, error: "Invalid Trojan link: Port is missing." };
                 }
 
@@ -912,15 +951,15 @@ function parseConfigLink(link, port) { // port argument is for the inbound SOCKS
                 }
 
                 if (!decodedVmessJson.add) {
-                     console.error(`Parse Error (VMess): Address (add) is missing in JSON for link: ${link}`);
+                    // console.error(`Parse Error (VMess): Address (add) is missing in JSON for link: ${link}`);
                     return { success: false, error: "Invalid VMess link: Address (add) is missing in JSON." };
                 }
                 if (!decodedVmessJson.port) {
-                    console.error(`Parse Error (VMess): Port (port) is missing in JSON for link: ${link}`);
+                    // console.error(`Parse Error (VMess): Port (port) is missing in JSON for link: ${link}`);
                     return { success: false, error: "Invalid VMess link: Port (port) is missing in JSON." };
                 }
                 if (!decodedVmessJson.id) {
-                    console.error(`Parse Error (VMess): User ID (id) is missing in JSON for link: ${link}`);
+                    // console.error(`Parse Error (VMess): User ID (id) is missing in JSON for link: ${link}`);
                     return { success: false, error: "Invalid VMess link: User ID (id) is missing in JSON." };
                 }
 
@@ -1010,8 +1049,10 @@ function parseConfigLink(link, port) { // port argument is for the inbound SOCKS
                 const linkContent = link.substring(5, firstHashIdx > -1 ? firstHashIdx : link.length);
 
                 const atSymbolIdx = linkContent.lastIndexOf('@');
-                if (atSymbolIdx === -1) return { success: false, error: "Invalid Shadowsocks link: Missing '@' separator between user_info and server_info." };
-
+                if (atSymbolIdx === -1) {
+                    // console.error(`Parse Error (SS): Missing '@' separator for link: ${link}`);
+                    return { success: false, error: "Invalid Shadowsocks link: Missing '@' separator between user_info and server_info." };
+                }
                 const userInfo = linkContent.substring(0, atSymbolIdx);
                 const serverInfo = linkContent.substring(atSymbolIdx + 1);
 
@@ -1037,7 +1078,7 @@ function parseConfigLink(link, port) { // port argument is for the inbound SOCKS
 
                 const portSeparatorIdx = serverInfo.lastIndexOf(':');
                 if (portSeparatorIdx === -1) {
-                    console.error(`Parse Error (SS): Server info (address:port) is malformed for link: ${link}`);
+                    // console.error(`Parse Error (SS): Server info (address:port) is malformed for link: ${link}`);
                     return { success: false, error: "Invalid Shadowsocks link: Server info (address:port) is malformed." };
                 }
 
@@ -1045,12 +1086,12 @@ function parseConfigLink(link, port) { // port argument is for the inbound SOCKS
                 const portStr = serverInfo.substring(portSeparatorIdx + 1);
 
                 if (!address) {
-                    console.error(`Parse Error (SS): Address is missing for link: ${link}`);
+                    // console.error(`Parse Error (SS): Address is missing for link: ${link}`);
                     return { success: false, error: "Invalid Shadowsocks link: Address is missing." };
                 }
                 const parsedPort = parseInt(portStr, 10);
                 if (!portStr || isNaN(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
-                     console.error(`Parse Error (SS): Port is invalid or missing for link: ${link}`);
+                    // console.error(`Parse Error (SS): Port is invalid or missing for link: ${link}`);
                     return { success: false, error: "Invalid Shadowsocks link: Port is invalid or missing." };
                 }
 
