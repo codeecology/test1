@@ -2485,7 +2485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         $('#progressText').textContent = lang('testing_progress', { completed: 0, total: configsToTest.length, progress: 0 });
 
         // Send the determined configs and potentially the groupId
-        window.api.startTests({ configs: configsToTest, settings: state.settings, groupId: groupIdToSend });
+        window.api.startTests({ configs: configsToTest, settings: state.settings, groupId: groupIdToSend, testType: 'standard' });
     };
 
     const handleConnectToggle = () => {
@@ -3058,9 +3058,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderTable();
                     updateTestUI();
                      $('#progressBar').style.width = '0%';
-                    $('#progressText').textContent = `Real Delay Testing 0/${configsToTest.length}`;
-
-                    window.api.startRealDelayTests({ configs: configsToTest, settings: state.settings });
+                    $('#progressText').textContent = `Real Delay Testing 0/${configsToTest.length}`; // This text update might need localization
+                    // Send 'real-delay' as testType
+                    window.api.startTests({ configs: configsToTest, settings: state.settings, testType: 'real-delay' });
                 },
                 iconClass: 'fa-solid fa-stopwatch'
             });
@@ -3082,8 +3082,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderTable();
                     updateTestUI();
                     $('#progressBar').style.width = '0%';
-                    $('#progressText').textContent = `Speed Testing 0/${configsToTest.length}`;
-                    window.api.startSpeedTests({ configs: configsToTest, settings: state.settings });
+                    $('#progressText').textContent = `Speed Testing 0/${configsToTest.length}`; // This text update might need localization
+                    // Send 'speed' as testType
+                    window.api.startTests({ configs: configsToTest, settings: state.settings, testType: 'speed' });
                 },
                 iconClass: 'fa-solid fa-gauge-high'
             });

@@ -416,302 +416,248 @@ async function runXrayTest(config, settings, testType, port, testLogicCallback) 
 
 const isTesting = () => activeTestProcesses.size > 0;
 
-ipcMain.on('test:start', (event, { configs, settings, groupId }) => {
-    if (isTesting()) {
-        const isStandardTestRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith('_standard'));
-        if (isStandardTestRunning) {
-            console.warn("[Main] Standard test is already running (standard tests).");
-            mainWindow.webContents.send('test:finish', { testType: 'standard' });
-            return;
-        }
+const TEST_TYPES = {
+    STANDARD: 'standard',
+    REAL_DELAY: 'real-delay',
+    SPEED: 'speed',
+};
+
+// Unified test handler
+ipcMain.on('test:start', async (event, { configs, settings, groupId, testType = TEST_TYPES.STANDARD }) => {
+    if (isDev) {
+        console.log(`[Main] Received '${testType}' test request. GroupID: ${groupId}, Configs passed: ${configs?.length}`);
+    }
+
+    const isTestTypeRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith(`_${testType}`));
+    if (isTestTypeRunning) {
+        console.warn(`[Main] A '${testType}' test sequence is already in progress.`);
+        mainWindow.webContents.send('test:finish', { testType });
+        return;
     }
 
     let allConfigsFromStore = store.get('configs', []);
     let effectiveConfigsToTest;
 
     if (groupId && groupId !== 'all' && groupId !== 'healthy_configs' && groupId !== 'favorite_configs') {
-        effectiveConfigsToTest = allConfigsFromStore.filter(c => c.groupId === groupId && c.status !== 'testing');
-        if (isDev) console.log(`[Main] Test for group ID: ${groupId}. Filtered ${effectiveConfigsToTest.length} configs.`);
+        effectiveConfigsToTest = allConfigsFromStore.filter(c => c.groupId === groupId);
+         if (isDev) console.log(`[Main] Testing group '${groupId}'. Found ${effectiveConfigsToTest.length} configs in group.`);
     } else {
-        effectiveConfigsToTest = [...configs].filter(c => c.status !== 'testing');
-        if (isDev) console.log(`[Main] Test for provided list. Filtered ${effectiveConfigsToTest.length} configs.`);
+        effectiveConfigsToTest = [...configs];
+         if (isDev) console.log(`[Main] Testing provided list of ${effectiveConfigsToTest.length} configs.`);
     }
 
+    effectiveConfigsToTest = effectiveConfigsToTest.filter(c => {
+        return !Array.from(activeTestProcesses.keys()).some(key => key.startsWith(c.id + '_'));
+    });
+
+    if (isDev) console.log(`[Main] Effective configs to test for '${testType}': ${effectiveConfigsToTest.length}`);
+
     if (effectiveConfigsToTest.length === 0) {
-        console.log("[Main] No configs to test after all filters.");
-        mainWindow.webContents.send('test:finish', { testType: 'standard' });
+        console.log(`[Main] No configs to test for '${testType}' after filtering.`);
+        mainWindow.webContents.send('test:finish', { testType });
         return;
     }
 
     let completedCount = 0;
     const totalToTest = effectiveConfigsToTest.length;
+    mainWindow.webContents.send('test:progress', { testType, progress: 0, total: totalToTest, completed: 0 });
 
-    mainWindow.webContents.send('test:progress', { testType: 'standard', progress: 0, total: totalToTest, completed: 0 });
+    let queueForTest = [...effectiveConfigsToTest];
 
-    let queueForStandardTest = [...effectiveConfigsToTest];
+    const testExecutors = {
+        [TEST_TYPES.STANDARD]: async (configParam, testSettings) => {
+            const port = 11000 + Math.floor(Math.random() * 10000);
+            return runXrayTest(configParam, testSettings, TEST_TYPES.STANDARD, port, async (agent, currentSettings) => {
+                const startTime = Date.now();
+                try {
+                    const response = await axios.get(currentSettings.testUrl, {
+                        httpAgent: agent, httpsAgent: agent, timeout: currentSettings.testTimeout * 1000
+                    });
+                    // Return success and delay, status code is for context if needed by caller
+                    return { success: true, delay: Date.now() - startTime, statusCode: response.status };
+                } catch (axiosError) {
+                    // Distinguish network errors from HTTP status errors
+                    const errorPayload = { success: false, delay: -1, error: axiosError.message || 'Request failed' };
+                    if (axiosError.response) {
+                        errorPayload.statusCode = axiosError.response.status;
+                        errorPayload.error = `Status ${axiosError.response.status}: ${axiosError.message}`;
+                    }
+                    return errorPayload;
+                }
+            });
+        },
+        [TEST_TYPES.REAL_DELAY]: async (configParam, testSettings) => {
+            const port = 21000 + Math.floor(Math.random() * 10000);
+            return runXrayTest(configParam, testSettings, TEST_TYPES.REAL_DELAY, port, async (agent, currentSettings) => {
+                let totalDelay = 0;
+                let successfulPings = 0;
+                let firstError = null;
+                for (let i = 0; i < currentSettings.realDelayTestPings; i++) {
+                    const startTime = Date.now();
+                    try {
+                        await axios.head(currentSettings.realDelayTestUrl, { // Using .head for lighter requests
+                            httpAgent: agent, httpsAgent: agent, timeout: currentSettings.realDelayTestTimeout
+                        });
+                        totalDelay += (Date.now() - startTime);
+                        successfulPings++;
+                    } catch (pingError) {
+                        if (isDev) console.warn(`Real delay ping ${i + 1} for ${configParam.name} failed: ${pingError.message}`);
+                        if (!firstError) firstError = pingError.message || 'Ping failed';
+                    }
+                    if (i < currentSettings.realDelayTestPings - 1) await new Promise(resolve => setTimeout(resolve, 100)); // Delay between pings
+                }
+                if (successfulPings > 0) {
+                    return { success: true, delay: Math.round(totalDelay / successfulPings) };
+                } else {
+                    return { success: false, delay: -1, error: firstError || 'All pings failed' };
+                }
+            });
+        },
+        [TEST_TYPES.SPEED]: async (configParam, testSettings) => {
+            const port = 31000 + Math.floor(Math.random() * 10000);
+            return runXrayTest(configParam, testSettings, TEST_TYPES.SPEED, port, async (agent, currentSettings) => {
+                const startTime = Date.now();
+                let fileSize = 0;
+                try {
+                    const response = await axios.get(currentSettings.speedTestFileUrl, {
+                        httpAgent: agent, httpsAgent: agent,
+                        responseType: 'arraybuffer',
+                        timeout: currentSettings.testTimeout * 1000 * 3, // Increased timeout for speed test
+                        onDownloadProgress: (progressEvent) => {
+                            if (progressEvent.total) fileSize = progressEvent.total;
+                            else if (progressEvent.loaded) fileSize = progressEvent.loaded; // Fallback if total not available
+                        }
+                    });
+                    const endTime = Date.now();
+                    const durationSeconds = (endTime - startTime) / 1000;
+                    if (!fileSize && response.data) fileSize = response.data.byteLength;
 
-    const runSingleStandardTestInternal = async (configParam) => {
+                    if (durationSeconds > 0.1 && fileSize > 1024) { // Min duration 0.1s, min size 1KB
+                        const speedBps = (fileSize * 8) / durationSeconds;
+                        const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
+                        return { success: true, downloadSpeed: parseFloat(speedMbps) };
+                    } else {
+                         throw new Error(`Invalid duration (${durationSeconds.toFixed(2)}s) or file size (${fileSize} bytes) for speed test.`);
+                    }
+                } catch (dlError) {
+                    if (isDev) console.warn(`Speed test download for ${configParam.name} failed: ${dlError.message}`);
+                    return { success: false, downloadSpeed: -1, error: dlError.message || 'Download failed' };
+                }
+            });
+        }
+    };
+
+    const selectedTestExecutor = testExecutors[testType];
+    if (!selectedTestExecutor) {
+        console.error(`[Main] Unknown testType: ${testType}`);
+        mainWindow.webContents.send('test:finish', { testType });
+        return;
+    }
+
+    const runSingleTestInternal = async (configParam) => {
+        // result from executor (e.g. runXrayTest via testExecutors[testType])
+        // already contains { success: boolean, ...specific_fields, error?: string }
+        const resultFromExecutor = await selectedTestExecutor(configParam, settings);
+
+        let resultPayload = { id: configParam.id, testType, success: resultFromExecutor.success };
+
+        if (testType === TEST_TYPES.STANDARD) {
+            resultPayload.delay = resultFromExecutor.delay; // Can be -1 on error
+            resultPayload.error = resultFromExecutor.error; // Error message
+            // statusCode might be present if it was an HTTP error from axios
+            if (resultFromExecutor.statusCode && resultFromExecutor.delay === -1 && !resultFromExecutor.error?.startsWith('Status')) {
+                 resultPayload.error = `Status ${resultFromExecutor.statusCode}` + (resultFromExecutor.error ? `: ${resultFromExecutor.error}`: '');
+            } else if (resultFromExecutor.delay > -1 && resultFromExecutor.statusCode && (resultFromExecutor.statusCode < 200 || resultFromExecutor.statusCode >= 300)) {
+                // This case means runXrayTest's inner callback in testExecutors.STANDARD resolved with success:true
+                // but the HTTP status was not 2xx. runXrayTest itself doesn't fail on non-2xx.
+                // The logic inside testExecutors.STANDARD should handle this.
+                // Let's assume testExecutors.STANDARD returns delay: -1 and an error for non-2xx.
+                // The current logic in testExecutors.STANDARD for axios.get:
+                // if (response.status >= 200 && response.status < 300) { return { success: true, delay: ..., status: ... }; }
+                // else { return { success: true but effectively error, delay: -1, error: `Status ${response.status}` }; }
+                // This needs to be consistent. Let's adjust testExecutors.STANDARD
+            }
+        } else if (testType === TEST_TYPES.REAL_DELAY) {
+            resultPayload.delay = resultFromExecutor.delay;
+            resultPayload.error = resultFromExecutor.error;
+        } else if (testType === TEST_TYPES.SPEED) {
+            resultPayload.downloadSpeed = resultFromExecutor.downloadSpeed;
+            resultPayload.error = resultFromExecutor.error;
+        }
+        mainWindow.webContents.send('test:result', resultPayload);
+
+        completedCount++;
+        mainWindow.webContents.send('test:progress', { testType, progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
+    };
+
+    // Adjust testExecutors.STANDARD to return success:false for non-2xx status codes
+    testExecutors[TEST_TYPES.STANDARD] = async (configParam, testSettings) => {
         const port = 11000 + Math.floor(Math.random() * 10000);
-        const result = await runXrayTest(configParam, settings, 'standard', port, async (agent, currentSettings) => {
+        return runXrayTest(configParam, testSettings, TEST_TYPES.STANDARD, port, async (agent, currentSettings) => {
             const startTime = Date.now();
             try {
                 const response = await axios.get(currentSettings.testUrl, {
                     httpAgent: agent, httpsAgent: agent, timeout: currentSettings.testTimeout * 1000
                 });
                 if (response.status >= 200 && response.status < 300) {
-                    return { delay: Date.now() - startTime };
+                    return { success: true, delay: Date.now() - startTime };
                 } else {
-                    return { delay: -1, error: `Status ${response.status}` };
+                    // Non-2xx status is considered a test failure for standard connectivity
+                    return { success: false, delay: -1, error: `Status ${response.status}` };
                 }
             } catch (axiosError) {
-                return { delay: -1, error: axiosError.message || 'Request failed' };
+                return { success: false, delay: -1, error: axiosError.message || 'Request failed' };
             }
         });
-
-        if (result.success) {
-            mainWindow.webContents.send('test:result', { id: configParam.id, delay: result.delay, error: result.error, testType: 'standard' });
-        } else {
-            mainWindow.webContents.send('test:result', { id: configParam.id, delay: -1, error: result.error, testType: 'standard' });
-        }
-
-        completedCount++;
-        mainWindow.webContents.send('test:progress', { testType: 'standard', progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
     };
 
+
     const pool = new Set();
-    function runNextInStandardQueue() {
-        while (pool.size < settings.concurrentTests && queueForStandardTest.length > 0) {
-            const configToRun = queueForStandardTest.shift();
-            const promise = runSingleStandardTestInternal(configToRun).finally(() => {
+    let concurrentLimit = settings.concurrentTests;
+    if (testType === TEST_TYPES.REAL_DELAY) concurrentLimit = Math.max(1, Math.min(settings.concurrentTests, 3));
+    if (testType === TEST_TYPES.SPEED) concurrentLimit = Math.max(1, Math.min(settings.concurrentTests, 2));
+
+
+    function runNextInQueue() {
+        while (pool.size < concurrentLimit && queueForTest.length > 0) {
+            if (!isTesting() && pool.size === 0 && completedCount < totalToTest) {
+                 console.log(`[Main] Test type '${testType}' stopped externally.`);
+                 mainWindow.webContents.send('test:finish', { testType });
+                 queueForTest = [];
+                 return;
+            }
+            const configToRun = queueForTest.shift();
+            const promise = runSingleTestInternal(configToRun).finally(() => {
                 pool.delete(promise);
-                if (queueForStandardTest.length > 0 || pool.size > 0) {
-                    runNextInStandardQueue();
+                if (queueForTest.length > 0 || pool.size > 0) {
+                    if (isTesting() || queueForTest.length > 0) runNextInQueue();
+                    else if (pool.size === 0 && completedCount === totalToTest) {
+                         mainWindow.webContents.send('test:finish', { testType });
+                         if (isDev) console.log(`[Main] '${testType}' Test sequence finished (all processed, pool emptied).`);
+                    }
                 } else if (completedCount === totalToTest) {
-                    mainWindow.webContents.send('test:finish', { testType: 'standard' });
-                    if(isDev) console.log("[Main] Standard Test sequence finished (all processed).");
+                    mainWindow.webContents.send('test:finish', { testType });
+                    if (isDev) console.log(`[Main] '${testType}' Test sequence finished (all processed).`);
                 }
             });
             pool.add(promise);
         }
-        if (queueForStandardTest.length === 0 && pool.size === 0 && completedCount === totalToTest && totalToTest > 0) {
-            mainWindow.webContents.send('test:finish', { testType: 'standard' });
-            if(isDev) console.log("[Main] Standard Test sequence finished (queue empty, pool empty).");
-        } else if (totalToTest > 0 && queueForStandardTest.length === 0 && pool.size === 0 && completedCount < totalToTest) {
-            console.warn(`[Main] Standard Test: Queue and pool are empty, but not all tests completed. Completed: ${completedCount}/${totalToTest}. Forcing finish.`);
-            mainWindow.webContents.send('test:finish', { testType: 'standard' });
-        }
-    }
-    runNextInStandardQueue();
-});
 
-ipcMain.on('test:stop', stopAllTests);
-function stopAllTests() {
-    activeTestProcesses.forEach(proc => { if (!proc.killed) proc.kill(); });
-    activeTestProcesses.clear();
-    mainWindow.webContents.send('test:finish', { testType: 'all_stopped' });
-    if(isDev) console.log("[Main] All tests stopped by user.");
-}
-
-// IPC Handler for Real Delay Test (Phase 2 - Network Logic)
-ipcMain.on('test:real-delay', async (event, { configs, settings }) => {
-    if (isDev) {
-        console.log(`[Main] Received 'test:real-delay' for ${configs.length} configs.`);
-    }
-    const isRealDelayTestRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith('_real-delay'));
-    if (isRealDelayTestRunning) {
-        console.warn("[Main] A Real Delay test sequence is already in progress.");
-        mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
-        return;
-    }
-
-    let configsToTest = [...configs].filter(c => !Array.from(activeTestProcesses.keys()).some(key => key.startsWith(c.id)));
-    if (configsToTest.length === 0) {
-        console.log("[Main] No configs for Real Delay test after filtering.");
-        mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
-        return;
-    }
-
-    let completedCount = 0;
-    const totalToTest = configsToTest.length;
-    mainWindow.webContents.send('test:progress', { testType: 'real-delay', progress: 0, total: totalToTest, completed: 0 });
-
-    let queueForRealDelayTest = [...configsToTest];
-
-    const runSingleRealDelayTestInternal = async (configParam) => {
-        const port = 21000 + Math.floor(Math.random() * 10000);
-        const result = await runXrayTest(configParam, settings, 'real-delay', port, async (agent, currentSettings) => {
-            let totalDelay = 0;
-            let successfulPings = 0;
-            let firstError = null;
-            for (let i = 0; i < currentSettings.realDelayTestPings; i++) {
-                const startTime = Date.now();
-                try {
-                    await axios.head(currentSettings.realDelayTestUrl, {
-                        httpAgent: agent, httpsAgent: agent, timeout: currentSettings.realDelayTestTimeout
-                    });
-                    totalDelay += (Date.now() - startTime);
-                    successfulPings++;
-                } catch (pingError) {
-                    if (isDev) console.warn(`Real delay ping ${i + 1} for ${configParam.name} failed: ${pingError.message}`);
-                    if (!firstError) firstError = pingError.message || 'Ping failed';
-                }
-                if (i < currentSettings.realDelayTestPings - 1) await new Promise(resolve => setTimeout(resolve, 100));
-            }
-            if (successfulPings > 0) {
-                return { delay: Math.round(totalDelay / successfulPings) };
+        if (queueForTest.length === 0 && pool.size === 0 && completedCount === totalToTest && totalToTest > 0) {
+            mainWindow.webContents.send('test:finish', { testType });
+            if (isDev) console.log(`[Main] '${testType}' Test sequence finished (queue empty, pool empty).`);
+        } else if (totalToTest > 0 && queueForTest.length === 0 && pool.size === 0 && completedCount < totalToTest) {
+            if (isTesting()) {
+                 console.warn(`[Main] '${testType}' Test: Queue and pool empty, but not all tests completed. Processed: ${completedCount}/${totalToTest}. Forcing finish as isTesting is true.`);
+                 stopAllTests();
             } else {
-                return { delay: -1, error: firstError || 'All pings failed' };
+                 console.log(`[Main] '${testType}' Test: Queue and pool empty, ${completedCount}/${totalToTest} processed. Likely stopped by user.`);
             }
-        });
-
-        if (result.success) {
-            mainWindow.webContents.send('test:result', { id: configParam.id, delay: result.delay, error: result.error, testType: 'real-delay' });
-        } else {
-            mainWindow.webContents.send('test:result', { id: configParam.id, delay: -1, error: result.error, testType: 'real-delay' });
-        }
-        completedCount++;
-        mainWindow.webContents.send('test:progress', { testType: 'real-delay', progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
-    };
-
-    const pool = new Set();
-    const concurrentRealDelayTests = Math.max(1, Math.min(settings.concurrentTests, 3)); // Ensure at least 1, max 3 or user setting
-
-    function runNextInRealDelayQueue() {
-        while (pool.size < concurrentRealDelayTests && queueForRealDelayTest.length > 0) {
-            if (!isTesting() && pool.size === 0) {
-                 console.log("[Main] Real Delay test stopped externally.");
-                 mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
-                 return;
-            }
-            const configToRun = queueForRealDelayTest.shift();
-            const promise = runSingleRealDelayTestInternal(configToRun).finally(() => {
-                pool.delete(promise);
-                if (queueForRealDelayTest.length > 0 || pool.size > 0) {
-                    if(isTesting() || queueForRealDelayTest.length > 0) runNextInRealDelayQueue();
-                    else if (pool.size === 0 && completedCount === totalToTest) {
-                         mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
-                         if (isDev) console.log("[Main] Real Delay Test sequence finished (all processed, pool emptied).");
-                    }
-                } else if (completedCount === totalToTest) {
-                    mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
-                    if (isDev) console.log("[Main] Real Delay Test sequence finished (all processed).");
-                }
-            });
-            pool.add(promise);
-        }
-        if (queueForRealDelayTest.length === 0 && pool.size === 0 && completedCount === totalToTest && totalToTest > 0) {
-            mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
-            if (isDev) console.log("[Main] Real Delay Test sequence finished (queue empty, pool empty).");
-        } else if (totalToTest > 0 && queueForRealDelayTest.length === 0 && pool.size === 0 && completedCount < totalToTest) {
-            console.warn(`[Main] Real Delay Test: Queue and pool are empty, but not all tests completed. Completed: ${completedCount}/${totalToTest}. Forcing finish.`);
-            mainWindow.webContents.send('test:finish', { testType: 'real-delay' });
+            if (isTesting()) mainWindow.webContents.send('test:finish', { testType });
         }
     }
-    runNextInRealDelayQueue();
+    runNextInQueue();
 });
-
-ipcMain.on('test:speed', async (event, { configs, settings }) => {
-    if (isDev) {
-        console.log(`[Main] Received 'test:speed' for ${configs.length} configs.`);
-    }
-    const isSpeedTestRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith('_speed'));
-    if (isSpeedTestRunning) {
-        console.warn("[Main] A Speed test sequence is already in progress.");
-        mainWindow.webContents.send('test:finish', { testType: 'speed' });
-        return;
-    }
-
-    let configsToTest = [...configs].filter(c => !Array.from(activeTestProcesses.keys()).some(key => key.startsWith(c.id)));
-    if (configsToTest.length === 0) {
-        console.log("[Main] No configs for Speed test after filtering.");
-        mainWindow.webContents.send('test:finish', { testType: 'speed' });
-        return;
-    }
-
-    let completedCount = 0;
-    const totalToTest = configsToTest.length;
-    mainWindow.webContents.send('test:progress', { testType: 'speed', progress: 0, total: totalToTest, completed: 0 });
-
-    let queueForSpeedTest = [...configsToTest];
-
-    const runSingleSpeedTestInternal = async (configParam) => {
-        const port = 31000 + Math.floor(Math.random() * 10000);
-        const result = await runXrayTest(configParam, settings, 'speed', port, async (agent, currentSettings) => {
-            const startTime = Date.now();
-            let fileSize = 0;
-            try {
-                const response = await axios.get(currentSettings.speedTestFileUrl, {
-                    httpAgent: agent, httpsAgent: agent,
-                    responseType: 'arraybuffer',
-                    timeout: currentSettings.testTimeout * 1000 * 2,
-                    onDownloadProgress: (progressEvent) => {
-                        if (progressEvent.total) fileSize = progressEvent.total;
-                        else if (progressEvent.loaded) fileSize = progressEvent.loaded;
-                    }
-                });
-                const endTime = Date.now();
-                const durationSeconds = (endTime - startTime) / 1000;
-                if (!fileSize && response.data) fileSize = response.data.byteLength;
-
-                if (durationSeconds > 0 && fileSize > 0) {
-                    const speedBps = (fileSize * 8) / durationSeconds;
-                    const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
-                    return { downloadSpeed: parseFloat(speedMbps) };
-                } else {
-                    throw new Error('Invalid duration or file size for speed test.');
-                }
-            } catch (dlError) {
-                if (isDev) console.warn(`Speed test download for ${configParam.name} failed: ${dlError.message}`);
-                return { downloadSpeed: -1, error: dlError.message || 'Download failed' };
-            }
-        });
-
-        if (result.success) {
-            mainWindow.webContents.send('test:result', { id: configParam.id, downloadSpeed: result.downloadSpeed, error: result.error, testType: 'speed' });
-        } else {
-            mainWindow.webContents.send('test:result', { id: configParam.id, downloadSpeed: -1, error: result.error, testType: 'speed' });
-        }
-        completedCount++;
-        mainWindow.webContents.send('test:progress', { testType: 'speed', progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
-    };
-
-    const pool = new Set();
-    const concurrentSpeedTests = Math.max(1, Math.min(settings.concurrentTests, 2)); // Example: limit to 2 concurrent speed tests
-
-    function runNextInSpeedQueue() {
-        while (pool.size < concurrentSpeedTests && queueForSpeedTest.length > 0) {
-            if (!isTesting() && pool.size === 0) {
-                 console.log("[Main] Speed test stopped externally.");
-                 mainWindow.webContents.send('test:finish', { testType: 'speed' });
-                 return;
-            }
-            const configToRun = queueForSpeedTest.shift();
-            const promise = runSingleSpeedTestInternal(configToRun).finally(() => {
-                pool.delete(promise);
-                if (queueForSpeedTest.length > 0 || pool.size > 0) {
-                    if(isTesting() || queueForSpeedTest.length > 0) runNextInSpeedQueue();
-                    else if (pool.size === 0 && completedCount === totalToTest) {
-                        mainWindow.webContents.send('test:finish', { testType: 'speed' });
-                        if (isDev) console.log("[Main] Speed Test sequence finished (all processed, pool emptied).");
-                    }
-                } else if (completedCount === totalToTest) {
-                    mainWindow.webContents.send('test:finish', { testType: 'speed' });
-                    if (isDev) console.log("[Main] Speed Test sequence finished (all processed).");
-                }
-            });
-            pool.add(promise);
-        }
-        if (queueForSpeedTest.length === 0 && pool.size === 0 && completedCount === totalToTest && totalToTest > 0) {
-            mainWindow.webContents.send('test:finish', { testType: 'speed' });
-            if (isDev) console.log("[Main] Speed Test sequence finished (queue empty, pool empty).");
-        } else if (totalToTest > 0 && queueForSpeedTest.length === 0 && pool.size === 0 && completedCount < totalToTest) {
-            console.warn(`[Main] Speed Test: Queue and pool are empty, but not all tests completed. Completed: ${completedCount}/${totalToTest}. Forcing finish.`);
-            mainWindow.webContents.send('test:finish', { testType: 'speed' });
-        }
-    }
-    runNextInSpeedQueue();
-});
-
 
 // --- System Proxy & Connection Management ---
 const PROXY_PORT = 10808;
