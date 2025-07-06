@@ -609,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Render Functions ---
     const renderAll = () => {
-        initializeColumnSettings();
+        initializeColumnVisibility(); // Corrected function name
         applyColumnVisibility();
         renderTable();
         renderGroups();
