@@ -114,7 +114,16 @@
                 <button id="closeDetailsPanelBtn" class="icon-btn" title="بستن پنل جزئیات">&times;</button>
             </div>
             <div class="panel-body" id="configDetailsBody">
+                <!-- Content will be populated by JS -->
                 <p class="empty-state" data-lang="select_config_to_view_details">یک کانفیگ را برای مشاهده جزئیات انتخاب کنید.</p>
+
+                <!-- Section for Notes (will be shown/hidden by JS based on selection) -->
+                <div id="configNotesSection" class="detail-section" style="display: none;">
+                    <h4 class="detail-section-title" data-lang="config_notes_title">یادداشت‌ها</h4>
+                    <textarea id="configNotesTextarea" class="config-notes-textarea" rows="4" placeholder="یادداشت‌های خود را اینجا بنویسید..."></textarea>
+                    <!-- <button id="saveNotesBtn" class="secondary-btn small-btn" data-lang="save_notes">ذخیره یادداشت</button> -->
+                </div>
+
             </div>
         </aside>
     </div>

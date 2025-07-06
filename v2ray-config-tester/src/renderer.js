@@ -208,6 +208,16 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_no_sub_url_for_group: "No subscription URL set for group \"{groupName}\".",
             toast_fetching_group_sub: "Fetching subscription for group \"{groupName}\"...",
             toast_failed_fetch_group_sub: "Failed to fetch subscription for group \"{groupName}\": {error}",
+            // Notes Feature
+            config_notes_title: "Notes",
+            save_notes: "Save Notes",
+            notes_saved_toast: "Notes saved.",
+            notes_placeholder: "Enter your notes here...",
+            // Favorites Feature
+            favorites_group_title: "Favorites",
+            add_to_favorites_ctx: "Add to Favorites",
+            remove_from_favorites_ctx: "Remove from Favorites",
+            toggle_favorite_ctx: "Toggle Favorite",
         },
         fa: {
             groups: "گروه‌ها", all_configs: "همه کانفیگ‌ها", add_config: "افزودن کانفیگ", delete_unhealthy: "حذف ناسالم‌ها",
@@ -218,16 +228,16 @@ document.addEventListener('DOMContentLoaded', () => {
             test_selected: "تست منتخب‌ها", copy_link: "کپی لینک", assign_to_group: "اختصاص به گروه",
             show_qr_code: "نمایش QR Code", delete: "حذف", edit_name: "ویرایش نام",
             confirm_delete_title: "تایید حذف", confirm_delete_config: "آیا از حذف این کانفیگ مطمئن هستید؟",
-            confirm_delete_group_title: "حذف گروه", // New
-            confirm_delete_group_message: "آیا از حذف گروه مطمئن هستید:", // New
-            confirm_delete_group_message_configs_note: "کانفیگ‌های این گروه بدون گروه خواهند شد.", // New
+            confirm_delete_group_title: "حذف گروه",
+            confirm_delete_group_message: "آیا از حذف گروه مطمئن هستید:",
+            confirm_delete_group_message_configs_note: "کانفیگ‌های این گروه بدون گروه خواهند شد.",
             add_group_title: "افزودن گروه جدید", add_group_message: "نام گروه جدید را وارد کنید:",
             edit_name_title: "ویرایش نام", edit_name_message: "نام جدید کانفیگ را وارد کنید:",
-            edit_group_name_title: "ویرایش نام گروه", // New
-            edit_group_name_message: "نام جدید گروه را وارد کنید:", // New
+            edit_group_name_title: "ویرایش نام گروه",
+            edit_group_name_message: "نام جدید گروه را وارد کنید:",
             toast_configs_added: "کانفیگ جدید اضافه شد.",
-            assign_to_new_group: "گروه جدید...", // New
-            ungroup_config: "بدون گروه", // New
+            assign_to_new_group: "گروه جدید...",
+            ungroup_config: "بدون گروه",
             // For Details Panel (Feature 7) - Farsi
             config_details_title: "جزئیات کانفیگ",
             select_config_to_view_details: "یک کانفیگ را برای مشاهده جزئیات انتخاب کنید.",
@@ -394,6 +404,11 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_no_sub_url_for_group: "هیچ آدرس اشتراکی برای گروه «{groupName}» تنظیم نشده.",
             toast_fetching_group_sub: "در حال دریافت اشتراک برای گروه «{groupName}»...",
             toast_failed_fetch_group_sub: "خطا در دریافت اشتراک برای گروه «{groupName}»: {error}",
+            // Notes Feature - Farsi
+            config_notes_title: "یادداشت‌ها",
+            save_notes: "ذخیره یادداشت",
+            notes_saved_toast: "یادداشت‌ها ذخیره شد.",
+            notes_placeholder: "یادداشت‌های خود را اینجا بنویسید...",
         }
     };
     const lang = (key, params = {}) => {
@@ -405,13 +420,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const formatStatus = (statusValue) => {
-        if (!statusValue) return lang('untested'); // Default if status is null or undefined
-        return lang(statusValue.toLowerCase()) || statusValue; // Use lang key or fallback to the value itself
+        if (!statusValue) return lang('untested');
+        return lang(statusValue.toLowerCase()) || statusValue;
     };
 
     const formatDelay = (delayValue) => {
         if (delayValue === null || delayValue === undefined || delayValue < 0) {
-            // Could add a specific lang key for 'N/A' if desired, e.g., lang('na_delay')
             return 'N/A';
         }
         return `${delayValue} ms`;
@@ -425,7 +439,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (config.fp) parts.push(`FP: ${config.fp}`);
         if (config.path) parts.push(`Path: ${config.path}`);
         if (config.serviceName) parts.push(`Svc: ${config.serviceName}`);
-        // Add more details as needed, e.g., flow, encryption for VLESS, method for SS
         if (config.protocol === 'vless') {
             if (config.encryption && config.encryption !== 'none') parts.push(`Enc: ${config.encryption}`);
             if (config.flow) parts.push(`Flow: ${config.flow}`);
@@ -434,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let detailsStr = parts.join(', ');
-        if (detailsStr.length > 30) { // Simple truncation for display
+        if (detailsStr.length > 30) {
             detailsStr = detailsStr.substring(0, 27) + '...';
         }
         return detailsStr;
@@ -445,25 +458,31 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const initialData = await window.api.getAllData();
             Object.assign(state, initialData);
+            // Ensure all configs have notes and isFavorite fields (for backward compatibility)
+            state.configs = state.configs.map(c => ({ notes: '', isFavorite: false, ...c }));
+
         } catch (error) {
             console.error("Failed to get initial data:", error);
             showToast(`Error loading initial data: ${error.message || 'Unknown error'}`, 'error');
-            // Initialize with default empty state if loading fails
             state.configs = [];
             state.groups = [];
-            state.settings = { concurrentTests: 10, testTimeout: 8, testUrl: 'http://cp.cloudflare.com/generate_204' };
+            // Ensure default settings also consider new fields if necessary, though 'notes' and 'isFavorite' are per-config
+            state.settings = {
+                concurrentTests: 10,
+                testTimeout: 8,
+                testUrl: 'http://cp.cloudflare.com/generate_204'
+                // fontSize, columnVisibility etc. are loaded or defaulted in their respective init functions
+            };
         }
         state.currentTheme = localStorage.getItem('theme') || 'dark-theme';
         document.body.className = state.currentTheme;
-        // Retrieve last test time from loaded settings
         if (state.settings && state.settings.lastTestCompletionTime) {
             state.lastTestCompletionTime = state.settings.lastTestCompletionTime;
         }
-        // Apply initial font size
         applyFontSize(state.settings.fontSize || 'medium');
 
         addEventListeners();
-        renderAll(); // renderAll calls updateDashboardStatsInStatusBar
+        renderAll();
     };
 
     const applyFontSize = (size) => {
@@ -687,27 +706,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderTable = () => {
         const tableBody = $('#configsTableBody');
         const configsToRender = getVisibleConfigs();
-        const colspanValue = 9;
+        // Calculate colspan dynamically based on visible columns
+        let colspanValue = 1; // For checkbox column
+        if (state.settings.columnVisibility) {
+            Object.values(state.settings.columnVisibility).forEach(isVisible => {
+                if (isVisible) colspanValue++;
+            });
+        } else { // Fallback if columnVisibility is not yet initialized (should be, but defensive)
+            colspanValue = Object.keys(columnDefinitions).length + 1;
+        }
+
 
         if (configsToRender.length === 0) {
-            let message = lang('no_configs_yet_message') || "No configurations added yet. Click \"Add Config\" or \"Import\"."; // Add lang key: no_configs_yet_message
+            let message = lang('no_configs_yet_message');
             if (state.searchTerm !== '') {
-                message = lang('no_configs_match_search_message') || "No configurations match your search term."; // Add lang key: no_configs_match_search_message
-            } else if (state.activeGroupId !== 'all' && state.activeGroupId !== 'healthy_configs') {
-                // A specific user-created group is selected and it's empty
-                const group = state.groups.find(g => g.id === state.activeGroupId);
-                message = lang('no_configs_in_group_message', { groupName: group ? group.name : lang('this_group') }) || `No configurations in group "${group ? group.name : 'this group'}".`; // Add lang key: no_configs_in_group_message, this_group
+                message = lang('no_configs_match_search_message');
+            } else if (state.activeGroupId === 'favorite_configs') {
+                message = lang('no_favorite_configs_message') || "No favorite configurations yet. Click the star to add some!"; // Add lang key: no_favorite_configs_message
             } else if (state.activeGroupId === 'healthy_configs') {
-                // Healthy group is selected and it's empty
-                 message = lang('no_healthy_configs_message') || "No healthy configurations found."; // Add lang key: no_healthy_configs_message
+                 message = lang('no_healthy_configs_message');
+            } else if (state.activeGroupId !== 'all') {
+                const group = state.groups.find(g => g.id === state.activeGroupId);
+                message = lang('no_configs_in_group_message', { groupName: group ? group.name : lang('this_group') });
             }
-            // If it's 'all' group and empty, the default "No configurations added yet" is appropriate unless state.configs.length > 0,
-            // which implies a bug in getVisibleConfigs if it returns empty for 'all' when configs exist and no search term.
-            // The initial condition (state.searchTerm === '' && state.activeGroupId === 'all') handles the true "empty initial state".
-            // If state.configs.length > 0 but configsToRender is 0 with 'all' group and no search, it's an anomaly.
-            // For now, the above logic should cover most cases.
 
-            tableBody.innerHTML = `<tr><td colspan="${colspanValue}" style="text-align: center; padding: 40px;">${message}</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="${colspanValue}" class="empty-table-message">${message}</td></tr>`;
             return;
         }
 
@@ -739,6 +762,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const statusCell = cells[1];
                 const statusIndicator = statusCell.querySelector('.status-indicator');
                 const statusText = statusCell.querySelector('span:last-child');
+                const favoriteIcon = statusCell.querySelector('.favorite-toggle-icon');
+
 
                 if (statusIndicator && statusText) {
                     const currentStatusClass = statusIndicator.className.match(/status-\S+/)?.[0];
@@ -747,38 +772,46 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (currentStatusClass) statusIndicator.classList.remove(currentStatusClass);
                         statusIndicator.classList.add(newStatusClass);
                     }
-                    if (!statusIndicator.classList.contains('status-indicator')) {
+                    if (!statusIndicator.classList.contains('status-indicator')) { // Ensure base class
                         statusIndicator.classList.add('status-indicator');
                     }
                     statusText.textContent = formatStatus(config.status);
-                } else { // Fallback if structure is broken (should not happen ideally)
-                    statusCell.innerHTML = `<span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span>`;
+                } else {
+                    statusCell.innerHTML = `<span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span><i class="favorite-toggle-icon ${config.isFavorite ? 'fa-solid' : 'fa-regular'} fa-star" title="${lang('toggle_favorite_ctx')}"></i>`;
                 }
+
+                if (favoriteIcon) { // Update existing favorite icon
+                    favoriteIcon.className = `favorite-toggle-icon ${config.isFavorite ? 'fa-solid' : 'fa-regular'} fa-star`;
+                    favoriteIcon.title = config.isFavorite ? lang('remove_from_favorites_ctx') : lang('add_to_favorites_ctx');
+                }
+
 
                 cells[2].textContent = config.name;
                 cells[2].title = config.name;
-
-                // Update Country cell to just text
                 cells[3].textContent = countryText;
-                cells[3].className = 'country-cell'; // Ensure class is set for styling if needed
-
+                cells[3].className = 'country-cell';
                 cells[4].textContent = formatDelay(config.delay);
                 cells[5].textContent = config.protocol;
                 cells[6].textContent = config.network;
-                cells[7].textContent = config.portToDisplay || '-'; // New Port cell
+                cells[7].textContent = config.portToDisplay || '-';
                 cells[8].textContent = formatDetails(config);
                 cells[8].title = formatDetails(config);
 
-                existingRowsById.delete(config.id); // Remove from map as it's been processed
-            } else { // Row doesn't exist, create it
+                existingRowsById.delete(config.id);
+            } else {
                 row = document.createElement('tr');
                 row.dataset.id = config.id;
                 if (isSelected) row.classList.add('selected');
                 if (isConnected) row.classList.add('connected');
 
+                // Ensure favorite icon is part of the status cell's HTML
                 row.innerHTML = `
                     <td class="checkbox-cell"><input type="checkbox" ${isSelected ? 'checked' : ''}></td>
-                    <td class="status-cell"><span class="status-indicator status-${config.status || 'untested'}"></span><span>${formatStatus(config.status)}</span></td>
+                    <td class="status-cell">
+                        <i class="favorite-toggle-icon ${config.isFavorite ? 'fa-solid' : 'fa-regular'} fa-star" title="${config.isFavorite ? lang('remove_from_favorites_ctx') : lang('add_to_favorites_ctx')}"></i>
+                        <span class="status-indicator status-${config.status || 'untested'}"></span>
+                        <span>${formatStatus(config.status)}</span>
+                    </td>
                     <td title="${config.name}">${config.name}</td>
                     <td class="country-cell">${countryText}</td>
                     <td>${formatDelay(config.delay)}</td>
@@ -787,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${config.portToDisplay || '-'}</td>
                     <td title="${formatDetails(config)}">${formatDetails(config)}</td>
                 `;
-                fragmentForNewRows.appendChild(row); // Add to fragment for new rows
+                fragmentForNewRows.appendChild(row);
             }
             rowsInNewOrder.push(row);
         });
@@ -832,82 +865,80 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderGroups = () => {
         const groupList = $('#groupList');
-        groupList.innerHTML = ''; // Clear existing groups first
+        groupList.innerHTML = '';
+
+        // Helper to create a group item
+        const createGroupItem = (id, iconClass, nameKey, count = -1, isUserGroup = false, groupData = null) => {
+            const li = document.createElement('li');
+            li.className = `group-item ${state.activeGroupId === id ? 'active' : ''}`;
+            li.dataset.groupId = id;
+
+            const icon = document.createElement('i');
+            icon.className = iconClass;
+            li.appendChild(icon);
+
+            const nameSpan = document.createElement('span');
+            // For user groups, nameKey is the actual name, not a lang key
+            nameSpan.textContent = isUserGroup ? nameKey : lang(nameKey);
+            li.appendChild(nameSpan);
+
+            if (count > -1) {
+                const countSpan = document.createElement('span');
+                countSpan.className = 'group-count';
+                countSpan.textContent = count;
+                li.appendChild(countSpan);
+            }
+
+            if (isUserGroup && groupData) {
+                const actionsSpan = document.createElement('span');
+                actionsSpan.className = 'group-actions';
+
+                const editBtn = document.createElement('i');
+                editBtn.className = 'fa-solid fa-pencil btn-edit-group';
+                editBtn.title = lang('edit_group_name_title'); // Use lang key for title
+                editBtn.dataset.groupId = groupData.id;
+                actionsSpan.appendChild(editBtn);
+
+                const subBtn = document.createElement('i');
+                subBtn.className = 'fa-solid fa-link btn-manage-group-sub';
+                subBtn.title = groupData.subscriptionUrl ? lang('edit_group_sub_url_title') : lang('set_group_sub_url_title'); // Add lang keys
+                subBtn.dataset.groupId = groupData.id;
+                actionsSpan.appendChild(subBtn);
+
+                if (groupData.subscriptionUrl) {
+                    const updateSubBtn = document.createElement('i');
+                    updateSubBtn.className = 'fa-solid fa-sync btn-update-group-sub';
+                    updateSubBtn.title = lang('update_group_sub_now_title', {lastUpdated: groupData.lastUpdated ? new Date(groupData.lastUpdated).toLocaleDateString() : lang('never')}); // Add lang keys
+                    updateSubBtn.dataset.groupId = groupData.id;
+                    actionsSpan.appendChild(updateSubBtn);
+                }
+
+                const deleteBtn = document.createElement('i');
+                deleteBtn.className = 'fa-solid fa-trash-alt btn-delete-group';
+                deleteBtn.title = lang('delete_group_title'); // Use lang key
+                deleteBtn.dataset.groupId = groupData.id;
+                actionsSpan.appendChild(deleteBtn);
+
+                li.appendChild(actionsSpan);
+            }
+            groupList.appendChild(li);
+        };
 
         // Add "All Configs" group
-        const allConfigsLi = document.createElement('li');
-        allConfigsLi.className = `group-item ${state.activeGroupId === 'all' ? 'active' : ''}`;
-        allConfigsLi.dataset.groupId = 'all';
-        allConfigsLi.innerHTML = `<i class="fa-solid fa-globe"></i> <span>${lang('all_configs')}</span>`;
-        groupList.appendChild(allConfigsLi);
+        createGroupItem('all', 'fa-solid fa-globe', 'all_configs');
+
+        // Add "Favorites" dynamic group
+        const favoriteCount = state.configs.filter(c => c.isFavorite).length;
+        createGroupItem('favorite_configs', 'fa-solid fa-star', 'favorites_group_title', favoriteCount);
 
         // Add "Healthy Configs" dynamic group
-        const healthyConfigsLi = document.createElement('li');
-        healthyConfigsLi.className = `group-item ${state.activeGroupId === 'healthy_configs' ? 'active' : ''}`;
-        healthyConfigsLi.dataset.groupId = 'healthy_configs'; // Special ID
-        healthyConfigsLi.innerHTML = `<i class="fa-solid fa-heart-circle-check"></i> <span>${lang('healthy_configs_group_title') || 'Healthy Configs'}</span>`; // Add lang key
-        // Add a count for healthy configs
         const healthyCount = state.configs.filter(c => c.status === 'healthy').length;
-        const healthyCountSpan = document.createElement('span');
-        healthyCountSpan.className = 'group-count';
-        healthyCountSpan.textContent = healthyCount;
-        healthyConfigsLi.appendChild(healthyCountSpan);
-        groupList.appendChild(healthyConfigsLi);
+        createGroupItem('healthy_configs', 'fa-solid fa-heart-circle-check', 'healthy_configs_group_title', healthyCount);
 
         // Add user-created groups
         state.groups.forEach(group => {
-            const li = document.createElement('li');
-            li.className = `group-item ${state.activeGroupId === group.id ? 'active' : ''}`;
-            li.dataset.groupId = group.id; // Keep this for selecting the group
-
-            const groupNameSpan = document.createElement('span');
-            groupNameSpan.textContent = group.name;
-
-            const iconFolder = document.createElement('i');
-            iconFolder.className = 'fa-solid fa-folder';
-
-            li.appendChild(iconFolder);
-            li.appendChild(document.createTextNode(' ')); // Add a space
-            li.appendChild(groupNameSpan);
-
-            const configCountSpan = document.createElement('span');
-            configCountSpan.className = 'group-count';
-            configCountSpan.textContent = state.configs.filter(c => c.groupId === group.id).length;
-            li.appendChild(configCountSpan);
-
-            const actionsSpan = document.createElement('span');
-            actionsSpan.className = 'group-actions';
-
-            const editBtn = document.createElement('i');
-            editBtn.className = 'fa-solid fa-pencil btn-edit-group';
-            editBtn.title = 'Edit group name';
-            editBtn.dataset.groupId = group.id;
-            actionsSpan.appendChild(editBtn);
-
-            const subBtn = document.createElement('i');
-            subBtn.className = 'fa-solid fa-link btn-manage-group-sub';
-            subBtn.title = group.subscriptionUrl ? 'Edit Subscription URL / Update' : 'Set Subscription URL';
-            subBtn.dataset.groupId = group.id;
-            actionsSpan.appendChild(subBtn);
-
-            // Add an update-specific button if URL exists, for clarity
-            if (group.subscriptionUrl) {
-                const updateSubBtn = document.createElement('i');
-                updateSubBtn.className = 'fa-solid fa-sync btn-update-group-sub';
-                updateSubBtn.title = `Update Subscription (Last: ${group.lastUpdated ? new Date(group.lastUpdated).toLocaleDateString() : 'Never'})`;
-                updateSubBtn.dataset.groupId = group.id;
-                actionsSpan.appendChild(updateSubBtn);
-            }
-
-
-            const deleteBtn = document.createElement('i');
-            deleteBtn.className = 'fa-solid fa-trash-alt btn-delete-group';
-            deleteBtn.title = 'Delete group';
-            deleteBtn.dataset.groupId = group.id;
-            actionsSpan.appendChild(deleteBtn);
-
-            li.appendChild(actionsSpan);
-            groupList.appendChild(li);
+            const userGroupCount = state.configs.filter(c => c.groupId === group.id).length;
+            createGroupItem(group.id, 'fa-solid fa-folder', group.name, userGroupCount, true, group);
         });
     };
 
@@ -961,13 +992,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.activeGroupId === 'healthy_configs') {
             filteredConfigs = state.configs.filter(c => c.status === 'healthy');
-        } else if (state.activeGroupId !== 'all') {
+        } else if (state.activeGroupId === 'favorite_configs') { // Added favorite filter
+            filteredConfigs = state.configs.filter(c => c.isFavorite);
+        } else if (state.activeGroupId !== 'all') { // User-created groups
             filteredConfigs = state.configs.filter(c => c.groupId === state.activeGroupId);
         }
-        // If state.activeGroupId is 'all', no group filtering is done initially on filteredConfigs
+        // If state.activeGroupId is 'all', no specific group filtering is done initially on filteredConfigs.
 
         return filteredConfigs
-            .filter(c => !searchTerm || c.name.toLowerCase().includes(searchTerm) || c.protocol.toLowerCase().includes(searchTerm) || (c.network && c.network.toLowerCase().includes(searchTerm)) || (c.address && c.address.toLowerCase().includes(searchTerm)))
+            .filter(c => !searchTerm ||
+                         c.name.toLowerCase().includes(searchTerm) ||
+                         c.protocol.toLowerCase().includes(searchTerm) ||
+                         (c.network && c.network.toLowerCase().includes(searchTerm)) ||
+                         (c.address && c.address.toLowerCase().includes(searchTerm)))
             .sort((a, b) => {
                 const valA = a[state.currentSort.column];
                 const valB = b[state.currentSort.column];
@@ -1089,6 +1126,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     serviceName: serviceName,
                     encryption: encryption,
                     flow: flow,
+                    notes: '',
+                    isFavorite: false, // Initialize isFavorite field
                 });
                 existingLinks.add(link);
                 addedCount++;
@@ -1096,8 +1135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (addedCount > 0) {
             saveAllData();
-            renderAll(); // This calls updateDashboardStatsInStatusBar
-            // updateDashboard(); // Redundant
+            renderAll();
             showToast(lang('toast_configs_added_count', { count: addedCount }), 'success');
         }
         if (failedCount > 0) {
@@ -1106,7 +1144,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const saveAllData = () => {
-        // Persist lastTestCompletionTime with other settings
+        // Ensure all configs have necessary fields (for backward compatibility if loading older data)
+        state.configs.forEach(config => {
+            if (config.notes === undefined) {
+                config.notes = '';
+            }
+            if (config.isFavorite === undefined) {
+                config.isFavorite = false;
+            }
+        });
+
         const settingsToSave = {
             ...state.settings,
             lastTestCompletionTime: state.lastTestCompletionTime
@@ -1924,25 +1971,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const showDetailsPanel = async (configId, isRefresh = false) => {
         const panel = $('#configDetailsPanel');
         const panelBody = $('#configDetailsBody');
+        const notesSection = $('#configNotesSection'); // Get notes section
+        const notesTextarea = $('#configNotesTextarea'); // Get notes textarea
 
-        if (!panel || !panelBody) {
-            console.error("Details panel elements not found.");
+        if (!panel || !panelBody || !notesSection || !notesTextarea) {
+            console.error("One or more details panel elements (panel, body, notes section/textarea) not found.");
             return;
         }
 
         if (!isRefresh && state.activeDetailConfigId === configId && panel.classList.contains('open')) {
-            closeDetailsPanel(); // Toggle if already open for the same config and not a refresh
+            closeDetailsPanel();
             return;
         }
 
         const config = state.configs.find(c => c.id === configId);
         if (!config) {
             showToast(lang('error_config_not_found'), 'error');
-            closeDetailsPanel(); // Close if config somehow not found
+            closeDetailsPanel();
             return;
         }
 
+        // Show loading state only for main details, not notes initially
         panelBody.innerHTML = `<p class="empty-state" data-lang="loading_details">${lang('loading_details')}</p>`;
+        notesSection.style.display = 'none'; // Hide notes while loading other details
+
         if (!panel.classList.contains('open')) {
             panel.classList.add('open');
         }
@@ -1951,42 +2003,80 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await window.api.getFullConfigDetails(config.link);
             if (result.success) {
+                // Populate main details first (this will clear panelBody's loading message)
                 populateDetailsPanel(result.details, config);
+
+                // Now handle notes section specifically
+                notesTextarea.value = config.notes || '';
+                notesTextarea.setAttribute('placeholder', lang('notes_placeholder'));
+                notesSection.style.display = 'block'; // Show notes section
+
+                // Ensure notes title is also localized
+                const notesTitle = notesSection.querySelector('.detail-section-title');
+                if(notesTitle) notesTitle.textContent = lang('config_notes_title');
+
+
+                // Remove any previous listener and add a new one for the current config
+                notesTextarea.onblur = null; // Clear old listener
+                notesTextarea.onblur = () => {
+                    if (config.notes !== notesTextarea.value) {
+                        config.notes = notesTextarea.value;
+                        saveAllData();
+                        showToast(lang('notes_saved_toast'), 'success');
+                    }
+                };
+
             } else {
                 throw new Error(result.error || 'Failed to get config details.');
             }
         } catch (error) {
             console.error("Error fetching/populating config details panel:", error);
             panelBody.innerHTML = `<p class="empty-state error-state">${lang('error_fetching_details')}: ${error.message}</p>`;
+            notesSection.style.display = 'none'; // Keep notes hidden on error
         }
     };
 
     const closeDetailsPanel = () => {
         const panel = $('#configDetailsPanel');
+        const notesSection = $('#configNotesSection'); // Get notes section
+        const notesTextarea = $('#configNotesTextarea');
+
         if (panel) {
             panel.classList.remove('open');
         }
+        if (notesTextarea) { // Clean up listener when panel closes
+            notesTextarea.onblur = null;
+        }
         state.activeDetailConfigId = null;
-        // Reset to placeholder after animation (optional, but good practice)
+
         setTimeout(() => {
             const panelBody = $('#configDetailsBody');
-            if (panelBody && !panel.classList.contains('open')) {
+            if (panelBody && (!panel || !panel.classList.contains('open'))) { // Check if panel is still defined
                  panelBody.innerHTML = `<p class="empty-state" data-lang="select_config_to_view_details">${lang('select_config_to_view_details')}</p>`;
+                 if(notesSection) notesSection.style.display = 'none'; // Hide notes section again
             }
-        }, 300); // Should match CSS transition duration
+        }, 300);
     };
 
     const populateDetailsPanel = (details, originalConfig) => {
         const panelBody = $('#configDetailsBody');
-        if (!panelBody) return;
-        panelBody.innerHTML = ''; // Clear previous content
+        // IMPORTANT: This function will now *not* clear panelBody.innerHTML directly at the start.
+        // It will append to it, or a wrapper div within it.
+        // For simplicity, let's assume the loading message is cleared by the caller (showDetailsPanel)
+        // and this function just adds new content.
+        // OR, create a specific container for these details *excluding* the notes section.
 
-        const addDetail = (labelKey, value, isLong = false) => { // Renamed from addDetailToModal to addDetail
+        // Clear previous details, but leave the notes section structure if it's already there
+        // A more robust way is to have a dedicated div for these auto-generated details.
+        // For now, let's clear and then re-add the placeholder if needed.
+        panelBody.innerHTML = ''; // Clear previous content (including any old notes section if not careful)
+
+        const addDetailPrimitive = (labelKey, value) => { // Renamed to avoid conflict, simpler args
             if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
-                return;
+                return null; // Return null if no item created
             }
             const item = document.createElement('div');
-            item.className = 'detail-item'; // Use original panel class names
+            item.className = 'detail-item';
 
             const label = document.createElement('div');
             label.className = 'detail-label';
@@ -2001,14 +2091,171 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 valueDiv.textContent = value;
             }
-            if (isLong) valueDiv.classList.add('long');
 
             item.appendChild(label);
             item.appendChild(valueDiv);
-            modalBody.appendChild(item);
+            return item; // Return the created DOM element
         };
 
-        // Re-use the detail keys from translations
+        const addDetailLong = (labelKey, value) => {
+            const item = addDetailPrimitive(labelKey, value);
+            if (item) {
+                const valueDiv = item.querySelector('.detail-value');
+                if (valueDiv) valueDiv.classList.add('long');
+            }
+            return item;
+        };
+
+        const appendIfNotNull = (element) => {
+            if (element) panelBody.appendChild(element);
+        }
+
+        // Main config details
+        appendIfNotNull(addDetailPrimitive('detail_name', originalConfig.name));
+        appendIfNotNull(addDetailPrimitive('detail_protocol', details.protocol));
+        appendIfNotNull(addDetailPrimitive('detail_address', originalConfig.address));
+        appendIfNotNull(addDetailPrimitive('detail_port', originalConfig.portToDisplay));
+
+        if (details.settings) {
+            if (details.protocol === 'vless' && details.settings.vnext?.[0]?.users?.[0]) {
+                const user = details.settings.vnext[0].users[0];
+                appendIfNotNull(addDetailPrimitive('detail_id_user', user.id));
+                appendIfNotNull(addDetailPrimitive('detail_encryption', user.encryption));
+                appendIfNotNull(addDetailPrimitive('detail_flow', user.flow));
+            } else if (details.protocol === 'vmess' && details.settings.vnext?.[0]?.users?.[0]) {
+                const user = details.settings.vnext[0].users[0];
+                appendIfNotNull(addDetailPrimitive('detail_id_user', user.id));
+                appendIfNotNull(addDetailPrimitive('detail_alter_id', user.alterId));
+                appendIfNotNull(addDetailPrimitive('detail_security_vmess', user.security));
+            } else if (details.protocol === 'trojan' && details.settings.servers?.[0]) {
+                appendIfNotNull(addDetailPrimitive('detail_password', details.settings.servers[0].password));
+            } else if (details.protocol === 'ss' && details.settings.servers?.[0]) {
+                appendIfNotNull(addDetailPrimitive('detail_ss_method', details.settings.servers[0].method));
+                appendIfNotNull(addDetailPrimitive('detail_password', details.settings.servers[0].password));
+            }
+        }
+
+        if (details.streamSettings) {
+            appendIfNotNull(addDetailPrimitive('detail_network', details.streamSettings.network));
+            appendIfNotNull(addDetailPrimitive('detail_security', details.streamSettings.security));
+            if (details.streamSettings.tlsSettings) {
+                const ts = details.streamSettings.tlsSettings;
+                appendIfNotNull(addDetailPrimitive('detail_sni', ts.serverName));
+                appendIfNotNull(addDetailPrimitive('detail_alpn', ts.alpn));
+                appendIfNotNull(addDetailPrimitive('detail_fingerprint', ts.fingerprint));
+                appendIfNotNull(addDetailPrimitive('detail_allow_insecure', typeof ts.allowInsecure === 'boolean' ? ts.allowInsecure : undefined));
+            }
+            if (details.streamSettings.realitySettings) {
+                const rs = details.streamSettings.realitySettings;
+                appendIfNotNull(addDetailPrimitive('detail_xtls_settings_publickey', rs.publicKey));
+                appendIfNotNull(addDetailPrimitive('detail_xtls_settings_shortid', rs.shortId));
+            }
+            if (details.streamSettings.wsSettings) {
+                appendIfNotNull(addDetailPrimitive('detail_ws_path', details.streamSettings.wsSettings.path));
+                if(details.streamSettings.wsSettings.headers) appendIfNotNull(addDetailPrimitive('detail_ws_host', details.streamSettings.wsSettings.headers.Host));
+            }
+            if (details.streamSettings.grpcSettings) {
+                appendIfNotNull(addDetailPrimitive('detail_service_name', details.streamSettings.grpcSettings.serviceName));
+                appendIfNotNull(addDetailPrimitive('detail_multi_mode', typeof details.streamSettings.grpcSettings.multiMode === 'boolean' ? details.streamSettings.grpcSettings.multiMode : undefined));
+            }
+        }
+        appendIfNotNull(addDetailLong('detail_full_link', originalConfig.link));
+
+        // Standard test results
+        appendIfNotNull(addDetailPrimitive('status', formatStatus(originalConfig.status)));
+        if (originalConfig.delay !== null && originalConfig.delay !== undefined) {
+            appendIfNotNull(addDetailPrimitive('delay', formatDelay(originalConfig.delay)));
+        }
+        if (originalConfig.errorMessage) {
+            appendIfNotNull(addDetailLong('error_message_detail', originalConfig.errorMessage));
+        }
+
+        // Real Delay Test results
+        if (originalConfig.realDelay !== undefined && originalConfig.realDelay !== null) {
+            appendIfNotNull(addDetailPrimitive('real_delay_avg_detail', formatDelay(originalConfig.realDelay)));
+            if (originalConfig.realDelayError) {
+                appendIfNotNull(addDetailLong('real_delay_error_detail', originalConfig.realDelayError));
+            }
+        } else if (originalConfig.realDelayError) {
+             appendIfNotNull(addDetailPrimitive('real_delay_avg_detail', 'N/A'));
+             appendIfNotNull(addDetailLong('real_delay_error_detail', originalConfig.realDelayError));
+        }
+
+        // Add Speed Test results if available
+        if (originalConfig.downloadSpeed !== undefined && originalConfig.downloadSpeed !== null) {
+            if (originalConfig.downloadSpeed > -1) {
+                appendIfNotNull(addDetailPrimitive('download_speed_detail', `${originalConfig.downloadSpeed} Mbps`));
+            } else {
+                appendIfNotNull(addDetailPrimitive('download_speed_detail', 'N/A'));
+            }
+            if (originalConfig.speedTestError) {
+                appendIfNotNull(addDetailLong('speed_test_error_detail', originalConfig.speedTestError));
+            }
+        } else if (originalConfig.speedTestError) {
+            appendIfNotNull(addDetailPrimitive('download_speed_detail', 'N/A'));
+            appendIfNotNull(addDetailLong('speed_test_error_detail', originalConfig.speedTestError));
+        }
+
+        // Test History section
+        const historyTitle = document.createElement('h4');
+        historyTitle.className = 'detail-section-title';
+        historyTitle.textContent = lang('test_history_title');
+        panelBody.appendChild(historyTitle);
+
+        const historyList = document.createElement('ul');
+        historyList.className = 'test-history-list';
+
+        const configHistory = (state.settings.testHistory || []).filter(entry => entry.configId === originalConfig.id).slice(0, 5);
+
+        if (configHistory.length === 0) {
+            const noHistoryItem = document.createElement('li');
+            noHistoryItem.className = 'history-item empty';
+            noHistoryItem.textContent = lang('no_test_history_for_config');
+            historyList.appendChild(noHistoryItem);
+        } else {
+            configHistory.forEach(entry => {
+                const item = document.createElement('li');
+                item.className = 'history-item';
+                const date = new Date(entry.timestamp).toLocaleString();
+                let resultText = '';
+                let resultClass = 'history-result'; // Default class
+                if (entry.testType === 'speed') {
+                    if (entry.downloadSpeed > -1) {
+                        resultText = `${entry.downloadSpeed} Mbps`;
+                    } else {
+                        resultText = `Error: ${entry.error || 'Failed'}`;
+                        resultClass += ' error-text'; // Add error class
+                    }
+                } else {
+                    if (entry.delay > -1) {
+                        resultText = `${entry.delay} ms`;
+                    } else {
+                        resultText = `Error: ${entry.error || 'Failed'}`;
+                        resultClass += ' error-text'; // Add error class
+                    }
+                }
+                item.innerHTML = `
+                    <span class="history-date">${date}</span>
+                    <span class="history-type">(${lang('test_type_' + entry.testType) || entry.testType})</span>:
+                    <span class="${resultClass}">${resultText}</span>
+                `;
+                historyList.appendChild(item);
+            });
+        }
+        panelBody.appendChild(historyList);
+
+        // Re-add the notes section structure if it was cleared (it should be separate in HTML)
+        // This is a bit of a hack; the notes section should ideally be outside the part of panelBody that populateDetailsPanel clears.
+        // For now, ensure the notes section is re-appended if it got wiped.
+        const notesSectionElement = $('#configNotesSection');
+        if (notesSectionElement) { // This assumes it's already in the DOM from index.html
+             panelBody.appendChild(notesSectionElement); // Move it to the end
+        }
+    };
+    // --- End Config Details Panel Logic ---
+
+
+    const handleAddConfigFromText = () => {
         addDetail('detail_name', originalConfig.name);
         addDetail('detail_protocol', details.protocol);
         addDetail('detail_address', originalConfig.address);
@@ -2298,13 +2545,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleTableClick = (e) => {
         const row = e.target.closest('tr');
-        if (!row || !row.dataset.id) return; // Click was not on a config row
+        if (!row || !row.dataset.id) return;
 
         const configId = row.dataset.id;
+        const config = state.configs.find(c => c.id === configId);
+        if (!config) return;
+
+        // Handle favorite toggle click
+        if (e.target.classList.contains('favorite-toggle-icon')) {
+            config.isFavorite = !config.isFavorite;
+            saveAllData();
+            renderTable(); // Re-render this row and potentially others if sort order changes
+            renderGroups(); // Update favorite count in sidebar
+            // If current view is "Favorites" and item is unfavorited, it will disappear.
+            // If current view is not "Favorites" and item is favorited, it will just update icon.
+            return; // Prevent row selection logic from firing for icon click
+        }
+
         const isCheckboxClick = e.target.type === 'checkbox';
         const isSpecialKey = e.ctrlKey || e.metaKey || e.shiftKey;
 
-        // Logic for selection (Ctrl/Shift clicks or checkbox clicks)
         if (isCheckboxClick || isSpecialKey) {
             if (e.shiftKey && state.lastSelectedId) {
                 const visibleConfigs = getVisibleConfigs();
@@ -2314,29 +2574,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     const start = Math.min(lastIdx, currentIdx);
                     const end = Math.max(lastIdx, currentIdx);
                     const shiftSelectedIds = visibleConfigs.slice(start, end + 1).map(c => c.id);
-                    // If the checkbox itself was clicked to initiate shift-select
                     if (isCheckboxClick && e.target.checked) {
                         state.selectedConfigIds = [...new Set([...state.selectedConfigIds, ...shiftSelectedIds])];
                     } else if (isCheckboxClick && !e.target.checked) {
                         state.selectedConfigIds = state.selectedConfigIds.filter(id => !shiftSelectedIds.includes(id));
-                    } else { // Row click with shift (not directly on checkbox)
+                    } else {
                         state.selectedConfigIds = shiftSelectedIds;
                     }
                 }
-            } else if (e.ctrlKey || e.metaKey) { // Ctrl/Cmd click
+            } else if (e.ctrlKey || e.metaKey) {
                 if (state.selectedConfigIds.includes(configId)) {
                     state.selectedConfigIds = state.selectedConfigIds.filter(id => id !== configId);
                 } else {
                     state.selectedConfigIds.push(configId);
                 }
                 state.lastSelectedId = configId;
-            } else { // Simple click (could be on checkbox or row)
+            } else {
                 state.selectedConfigIds = [configId];
                 state.lastSelectedId = configId;
             }
-            renderTable(); // Re-render for selection changes
+            renderTable();
             updateConnectionButton();
-        } else if (!isCheckboxClick && !isSpecialKey) { // Simple row click (not on checkbox, no special keys)
+        } else if (!isCheckboxClick && !isSpecialKey) {
             state.selectedConfigIds = [configId];
             state.lastSelectedId = configId;
             renderTable();
@@ -2344,7 +2603,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const handleTableContextMenu = async (e) => { // Made async to fetch details
+    const handleTableContextMenu = async (e) => {
         e.preventDefault();
         const row = e.target.closest('tr');
         if (!row || !row.dataset.id) { // Context menu on empty table area or header
@@ -2747,11 +3006,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const getGlobalContextMenuItems = () => {
         return [
-            { label: lang('ctx_add_from_clipboard'), action: handleAddFromClipboard },
-            { label: lang('ctx_add_new_group'), action: handleAddGroup },
+            { label: lang('ctx_add_from_clipboard'), action: handleAddFromClipboard, iconClass: 'fa-solid fa-paste' },
+            { label: lang('ctx_add_new_group'), action: handleAddGroup, iconClass: 'fa-solid fa-folder-plus' },
             { type: 'separator' },
-            { label: lang('ctx_test_all_visible'), action: () => handleStartTest() },
-            { label: lang('ctx_delete_all_unhealthy'), action: handleDeleteUnhealthy },
+            { label: lang('ctx_test_all_visible'), action: () => handleStartTest(), iconClass: 'fa-solid fa-play-circle' },
+            { label: lang('ctx_delete_all_unhealthy'), action: handleDeleteUnhealthy, iconClass: 'fa-solid fa-heart-crack' },
         ];
     };
 
@@ -2761,14 +3020,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Standard actions for single selection
         if (state.selectedConfigIds.length === 1 && selectedConfig) {
-            // "View Details" is now done by clicking the row, so it's not needed in context menu.
-            // If we want it back, it should call showDetailsPanel(selectedConfig.id)
-            // items.push({
-            //     label: lang('view_details_ctx') || "View Details",
-            //     action: () => showDetailsPanel(selectedConfig.id),
-            //     iconClass: 'fa-solid fa-circle-info'
-            // });
-            // items.push({ type: 'separator' });
+            const favoriteActionText = selectedConfig.isFavorite ? lang('remove_from_favorites_ctx') : lang('add_to_favorites_ctx');
+            const favoriteActionIcon = selectedConfig.isFavorite ? 'fa-solid fa-star-half-alt' : 'fa-regular fa-star'; // Example: use half-star or outline
+            items.push({
+                label: favoriteActionText,
+                action: () => {
+                    selectedConfig.isFavorite = !selectedConfig.isFavorite;
+                    saveAllData();
+                    renderTable();
+                    renderGroups();
+                },
+                iconClass: favoriteActionIcon
+            });
+            items.push({ type: 'separator' });
             items.push({ label: lang('copy_link'), action: () => navigator.clipboard.writeText(selectedConfig.link).then(() => showToast(lang('toast_link_copied'), 'success')).catch(e => showToast(lang('toast_failed_copy_link'), 'error')), iconClass: 'fa-solid fa-copy' });
             items.push({ label: lang('show_qr_code'), action: () => handleShowQRCode(selectedConfig.link), iconClass: 'fa-solid fa-qrcode' });
             items.push({ label: lang('edit_name'), action: () => handleEditName(selectedConfig), iconClass: 'fa-solid fa-pen-to-square' });
@@ -2776,8 +3040,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Actions for any selection (single or multiple)
         if (state.selectedConfigIds.length > 0) {
+            // If multiple items are selected, "Toggle Favorite" might be ambiguous.
+            // Could offer "Add All to Favorites" / "Remove All from Favorites" or disable if mixed.
+            // For now, let's keep the single-select favorite toggle for simplicity in context menu.
+            // Test, Real Delay, Speed Test actions:
             items.push({
-                label: `${lang('test_selected')} (${state.selectedConfigIds.length})`, // This is the standard test
+                label: `${lang('test_selected')} (${state.selectedConfigIds.length})`,
                 action: () => {
                     if (state.isTesting) {
                         showToast(lang('toast_test_already_running'), 'warning');
@@ -2795,35 +3063,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     $('#progressBar').style.width = '0%';
                     $('#progressText').textContent = `Testing 0/${configsToTest.length}`;
                     window.api.startTests({ configs: configsToTest, settings: state.settings });
-                }
+                },
+                iconClass: 'fa-solid fa-play' // Added icon
             });
             // Add Real Delay Test option
             items.push({
-                label: `${lang('real_delay_test_selected_ctx', { count: state.selectedConfigIds.length })}`, // Add lang key
-                action: () => {
-                    if (state.isTesting) {
-                        showToast(lang('toast_test_already_running'), 'warning');
-                        return;
-                    }
-                    const configsToTest = state.configs.filter(c => state.selectedConfigIds.includes(c.id));
-                    if (configsToTest.length === 0) {
-                        showToast(lang('toast_no_configs_selected_test'), 'warning'); // Add lang key
-                        return;
-                    }
-                    state.isTesting = true; // Use the same flag for now
-                    configsToTest.forEach(c => c.status = 'testing'); // Or a new status like 'real_testing'
-                    renderTable();
-                    updateTestUI();
-                     $('#progressBar').style.width = '0%';
-                    $('#progressText').textContent = `Real Delay Testing 0/${configsToTest.length}`;
-
-                    window.api.startRealDelayTests({ configs: configsToTest, settings: state.settings });
-                },
-                iconClass: 'fa-solid fa-stopwatch'
-            });
-            // Add Speed Test option
-            items.push({
-                label: `${lang('speed_test_selected_ctx', { count: state.selectedConfigIds.length })}`, // Add lang key
+                label: `${lang('real_delay_test_selected_ctx', { count: state.selectedConfigIds.length })}`,
                 action: () => {
                     if (state.isTesting) {
                         showToast(lang('toast_test_already_running'), 'warning');
@@ -2835,11 +3080,35 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     state.isTesting = true;
-                    configsToTest.forEach(c => c.status = 'testing'); // Or 'speed_testing'
+                    configsToTest.forEach(c => c.status = 'testing');
+                    renderTable();
+                    updateTestUI();
+                     $('#progressBar').style.width = '0%';
+                    $('#progressText').textContent = `Real Delay Testing 0/${configsToTest.length}`;
+
+                    window.api.startRealDelayTests({ configs: configsToTest, settings: state.settings });
+                },
+                iconClass: 'fa-solid fa-stopwatch'
+            });
+            // Add Speed Test option
+            items.push({
+                label: `${lang('speed_test_selected_ctx', { count: state.selectedConfigIds.length })}`,
+                action: () => {
+                    if (state.isTesting) {
+                        showToast(lang('toast_test_already_running'), 'warning');
+                        return;
+                    }
+                    const configsToTest = state.configs.filter(c => state.selectedConfigIds.includes(c.id));
+                    if (configsToTest.length === 0) {
+                        showToast(lang('toast_no_configs_selected_test'), 'warning');
+                        return;
+                    }
+                    state.isTesting = true;
+                    configsToTest.forEach(c => c.status = 'testing');
                     renderTable();
                     updateTestUI();
                     $('#progressBar').style.width = '0%';
-                    $('#progressText').textContent = `Speed Testing 0/${configsToTest.length}`; // TODO: Localize
+                    $('#progressText').textContent = `Speed Testing 0/${configsToTest.length}`;
                     window.api.startSpeedTests({ configs: configsToTest, settings: state.settings });
                 },
                 iconClass: 'fa-solid fa-gauge-high'
@@ -2849,19 +3118,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Assign to Group Options ---
         if (state.selectedConfigIds.length > 0) {
             const groupSubmenuItems = [];
-            // Filter out dynamic groups like 'healthy_configs' from assignable groups
-            const assignableGroups = state.groups; // In future, if more dynamic groups, filter them out here.
+            const assignableGroups = state.groups;
 
             assignableGroups.forEach(g => {
                 groupSubmenuItems.push({
                     label: g.name,
-                    action: () => handleAssignToGroup(g.id)
+                    action: () => handleAssignToGroup(g.id),
+                    iconClass: 'fa-solid fa-folder' // Icon for existing groups in submenu
                 });
             });
             groupSubmenuItems.push({ type: 'separator' });
             groupSubmenuItems.push({
                 label: lang('assign_to_new_group'),
-                action: () => handleAssignToGroup('new')
+                action: () => handleAssignToGroup('new'),
+                iconClass: 'fa-solid fa-folder-plus' // Icon for new group option
             });
 
             if (state.selectedConfigIds.some(id => {
@@ -2871,32 +3141,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 groupSubmenuItems.push({ type: 'separator' });
                 groupSubmenuItems.push({
                     label: lang('ungroup_config'),
-                    action: () => handleAssignToGroup(null)
+                    action: () => handleAssignToGroup(null),
+                    iconClass: 'fa-solid fa-times-circle' // Icon for ungrouping
                 });
             }
 
-            // Only add the "Assign to Group" parent item if there are actual groups or "New Group" option
-            if (assignableGroups.length > 0 || true) { // True because "New Group..." is always an option
+            if (assignableGroups.length > 0 || true) {
                  items.push({ type: 'separator' });
                 items.push({
                     label: lang('assign_to_group'),
                     submenu: groupSubmenuItems,
+                    iconClass: 'fa-solid fa-object-group' // Icon for the main "Assign to Group"
                 });
                 items.push({ type: 'separator' });
             }
         }
         // --- End Assign to Group Options ---
 
-        // Group-specific selection actions (only if a single config is the context)
-        if (originalConfig) {
+        // Group-specific selection actions (only if a single config is the context, implies originalConfig is present)
+        if (originalConfig) { // This check implies it's a single-config context menu
             items.push({ type: 'separator' });
             items.push({ label: lang('ctx_select_healthy_in_group'), action: () => handleSelectByStatusInGroup('healthy'), iconClass: 'fa-solid fa-check-circle' });
             items.push({ label: lang('ctx_select_unhealthy_in_group'), action: () => handleSelectByStatusInGroup('unhealthy'), iconClass: 'fa-solid fa-heart-crack' });
             items.push({ label: lang('ctx_select_untested_in_group'), action: () => handleSelectByStatusInGroup('untested'), iconClass: 'fa-solid fa-question-circle' });
         }
 
-
-        items.push({ label: `${lang('delete')} (${state.selectedConfigIds.length})`, action: () => handleDeleteConfig() });
+        if (state.selectedConfigIds.length > 0) { // Delete action available if any selection
+            items.push({ label: `${lang('delete')} (${state.selectedConfigIds.length})`, action: () => handleDeleteConfig(), iconClass: 'fa-solid fa-trash-alt' });
+        }
         return items;
     };
 
@@ -3012,6 +3284,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Handle actions triggered from the main process menu
+    window.api.onMenuAction((action) => {
+        switch (action) {
+            case 'open-add-config-modal':
+                openModal('addConfigModal');
+                break;
+            case 'open-settings-modal':
+                openModal('settingsModal');
+                break;
+            case 'open-import-data-modal':
+                // This is handled within settings modal, so just open settings
+                openModal('settingsModal');
+                // If a direct import was desired, a new handler would be needed.
+                // For example, document.getElementById('importDataBtn').click();
+                // but that assumes the settings modal's button is always available.
+                // A cleaner way would be to call handleImportData() directly if it's safe.
+                // For now, opening settings modal is a safe way to access it.
+                // Or, directly call handleImportData if it doesn't depend on modal state:
+                // handleImportData();
+                // Let's make it open settings to be safe and consistent for now.
+                break;
+            case 'open-export-data-modal':
+                // Similar to import, this is in settings.
+                openModal('settingsModal');
+                // Or directly call: handleExportData();
+                break;
+            case 'toggle-theme':
+                const themeToggleBtn = $('#themeToggleBtn');
+                if (themeToggleBtn) themeToggleBtn.click();
+                break;
+            // Add other actions here if needed
+        }
+    });
 
     init();
 });

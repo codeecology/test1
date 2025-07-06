@@ -93,19 +93,123 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, 'index.html'));
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
-        if (isDev) mainWindow.webContents.openDevTools();
+        // if (isDev) mainWindow.webContents.openDevTools(); // Keep DevTools closed by default, can be opened via View menu
     });
 
     mainWindow.on('close', (event) => {
-        // Instead of quitting, hide the window to the tray
         event.preventDefault();
         mainWindow.hide();
     });
 
-    Menu.setApplicationMenu(null);
+    // Create Application Menu
+    const menuTemplate = [
+        {
+            label: 'File',
+            submenu: [
+                {
+                    label: 'Add Config...',
+                    accelerator: 'CmdOrCtrl+N',
+                    click: () => mainWindow.webContents.send('menu-action', 'open-add-config-modal')
+                },
+                {
+                    label: 'Import Data (JSON)...',
+                    click: () => mainWindow.webContents.send('menu-action', 'open-import-data-modal')
+                },
+                {
+                    label: 'Export Data (JSON)...',
+                    click: () => mainWindow.webContents.send('menu-action', 'open-export-data-modal')
+                },
+                { type: 'separator' },
+                {
+                    label: 'Settings...',
+                    accelerator: 'CmdOrCtrl+,',
+                    click: () => mainWindow.webContents.send('menu-action', 'open-settings-modal')
+                },
+                { type: 'separator' },
+                { role: 'quit' }
+            ]
+        },
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                { role: 'selectAll' }
+            ]
+        },
+        {
+            label: 'View',
+            submenu: [
+                {
+                    label: 'Toggle Theme',
+                    click: () => mainWindow.webContents.send('menu-action', 'toggle-theme')
+                },
+                { role: 'reload' },
+                { role: 'forceReload' },
+                { role: 'toggleDevTools' },
+                { type: 'separator' },
+                { role: 'resetZoom' },
+                { role: 'zoomIn' },
+                { role: 'zoomOut' },
+                { type: 'separator' },
+                { role: 'togglefullscreen' }
+            ]
+        },
+        {
+            label: 'Help',
+            submenu: [
+                {
+                    label: 'About Ultimate V2Ray Tester',
+                    click: () => {
+                        dialog.showMessageBox(mainWindow, {
+                            type: 'info',
+                            title: 'About Ultimate V2Ray Tester',
+                            message: `Ultimate V2Ray Tester\nVersion: ${app.getVersion()}\n\nAn Electron application for testing V2Ray configurations.`,
+                            buttons: ['OK']
+                        });
+                    }
+                }
+            ]
+        }
+    ];
+
+    // On macOS, add an empty first menu item for app-specific actions like "About", "Hide", etc.
+    if (process.platform === 'darwin') {
+        menuTemplate.unshift({
+            label: app.getName(), // Or app.name on older Electron versions
+            submenu: [
+                { role: 'about' }, // This will use the 'About' from Help menu if not defined here, or a default one
+                { type: 'separator' },
+                { role: 'services', submenu: [] },
+                { type: 'separator' },
+                { role: 'hide' },
+                { role: 'hideOthers' },
+                { role: 'unhide' },
+                { type: 'separator' },
+                { role: 'quit' }
+            ]
+        });
+        // Correct "About" role for macOS if a custom one is in Help menu
+        // Find the custom About menu item and assign it to the app menu's 'about' role
+        const helpMenu = menuTemplate.find(m => m.label === 'Help');
+        if (helpMenu && helpMenu.submenu[0] && helpMenu.submenu[0].label.includes('About')) {
+            const aboutItem = helpMenu.submenu[0];
+            // Ensure the app menu 'about' role points to our custom dialog
+             menuTemplate[0].submenu.find(item => item.role === 'about').click = aboutItem.click;
+        }
+
+    }
+
+
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    Menu.setApplicationMenu(menu);
 }
 
-// FEATURE: System Tray (Idea #41)
+// FEATURE: System Tray
 function createTray() {
     const icon = nativeImage.createFromPath(iconPath);
     tray = new Tray(icon);
@@ -228,113 +332,116 @@ ipcMain.handle('system:get-country', async (event, hostname) => {
 });
 
 // --- Advanced Testing Engine ---
+
+// Helper function to manage Xray process for a single test
+async function runXrayTest(config, settings, testType, port, testLogicCallback) {
+    const genConfigResponse = generateTempConfig(config.link, port);
+    if (!genConfigResponse.success) {
+        return { success: false, error: genConfigResponse.error };
+    }
+    const configPath = genConfigResponse.path;
+    let xrayProcess;
+
+    try {
+        xrayProcess = spawn(xrayPath, ['run', '-c', configPath]);
+        activeTestProcesses.set(config.id + '_' + testType, xrayProcess); // Unique key for active processes
+
+        // Error handling for spawn itself
+        await new Promise((resolve, reject) => { // Wrap spawn and startup in a promise
+            xrayProcess.on('error', (spawnError) => {
+                console.error(`Failed to start Xray for ${testType} test (config ${config.id}):`, spawnError);
+                reject(new Error(`Xray start error: ${spawnError.message}`));
+            });
+
+            // Wait for Xray to signal it has started
+            const xrayStartTimeoutMs = settings.testTimeout > 5 ? (settings.testTimeout * 1000 / 2) : 5000;
+            const startupTimeoutId = setTimeout(() => {
+                reject(new Error(`Xray startup timeout for ${testType} test`));
+            }, xrayStartTimeoutMs);
+
+            let outputBuffer = '';
+            const onData = (data) => {
+                outputBuffer += data.toString();
+                if (isDev && testType !== 'main_connection') console.log(`Xray stdout (${testType}, config ${config.id}, port ${port}): ${data.toString().trim()}`);
+                if (/Xray.*started/i.test(outputBuffer)) {
+                    clearTimeout(startupTimeoutId);
+                    xrayProcess.stdout.removeListener('data', onData);
+                    resolve();
+                }
+            };
+            xrayProcess.stdout.on('data', onData);
+
+            xrayProcess.once('exit', (code, signal) => {
+                clearTimeout(startupTimeoutId);
+                xrayProcess.stdout.removeListener('data', onData);
+                if (!/Xray.*started/i.test(outputBuffer)) { // If exited before starting properly
+                    reject(new Error(`Xray exited prematurely (${testType}, code ${code}, signal ${signal})`));
+                }
+            });
+        });
+
+        // If Xray started successfully, execute the specific test logic
+        const agent = new SocksProxyAgent(`socks5://127.0.0.1:${port}`);
+        const testResult = await testLogicCallback(agent, settings);
+        return { success: true, ...testResult };
+
+    } catch (error) {
+        // This catches errors from spawn, startup promise, or testLogicCallback
+        return { success: false, error: error.message || `General error in ${testType} test` };
+    } finally {
+        if (xrayProcess && !xrayProcess.killed) {
+            xrayProcess.kill();
+        }
+        if (configPath) {
+            fs.unlink(configPath, (err) => {
+                if (err) console.error(`Failed to delete temp config for ${testType} test '${configPath}':`, err);
+            });
+        }
+        activeTestProcesses.delete(config.id + '_' + testType);
+    }
+}
+
+
 const isTesting = () => activeTestProcesses.size > 0;
 
 ipcMain.on('test:start', (event, { configs, settings }) => {
-    if (isTesting()) return;
-    let configsToTest = [...configs];
-    let completedCount = 0;
-
-    const runSingleTest = async (config) => {
-        const port = 11000 + Math.floor(Math.random() * 50000); // TODO: Consider a port manager for more robust port allocation
-        const genConfigResponse = generateTempConfig(config.link, port);
-
-        if (!genConfigResponse.success) {
-            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: genConfigResponse.error });
-            // Ensure completedCount is incremented and progress is updated even for parse failures
-            completedCount++;
-            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
-            activeTestProcesses.delete(config.id); // Remove from active if it was added optimistically, though it shouldn't be
+    if (isTesting()) { // Basic check, more granular control might be needed if multiple test types can run
+        const isStandardTestRunning = Array.from(activeTestProcesses.keys()).some(key => key.endsWith('_standard'));
+        if (isStandardTestRunning) {
+            console.warn("[Main] Standard test is already running.");
             return;
         }
-        const configPath = genConfigResponse.path;
+    }
+    let configsToTest = [...configs];
+    let completedCount = 0;
+    const totalToTest = configsToTest.length;
 
-        let testProcess; // Define testProcess here to be accessible in finally block
-        try {
-            testProcess = spawn(xrayPath, ['run', '-c', configPath]);
-            activeTestProcesses.set(config.id, testProcess);
+    mainWindow.webContents.send('test:progress', { progress: 0, total: totalToTest, completed: 0 });
 
-            // Error handling for spawn itself (e.g., xrayPath not found, permissions)
-            testProcess.on('error', (spawnError) => {
-                console.error(`Failed to start Xray process for config ${config.id}:`, spawnError);
-                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: `Xray start error: ${spawnError.message}` });
-                // Cleanup is handled in 'close' or 'exit' event if spawn fails this way
-                return; // Exit before trying to use the process
-            });
 
-            // Optional: Listen to stderr for early Xray errors
-            /*
-            if (isDev) {
-                testProcess.stderr.on('data', (data) => {
-                    console.error(`Xray stderr (config ${config.id}): ${data}`);
-                });
-            }
-            */
+    const runSingleStandardTest = async (config) => {
+        const port = 11000 + Math.floor(Math.random() * 10000); // Port range for standard tests
 
-            // Wait for Xray to signal it has started
-            const xrayStartTimeoutMs = settings.testTimeout > 5 ? (settings.testTimeout * 1000 / 2) : 5000; // Use half of test timeout or 5s min for xray start
-            try {
-                await new Promise((resolve, reject) => {
-                    const timeoutId = setTimeout(() => {
-                        reject(new Error('Xray startup timeout'));
-                    }, xrayStartTimeoutMs);
-
-                    let outputBuffer = '';
-                    const onData = (data) => {
-                        outputBuffer += data.toString();
-                        if (isDev) console.log(`Xray stdout (config ${config.id}, port ${port}): ${data.toString()}`); // Debug output
-                        if (/Xray.*started/i.test(outputBuffer)) { // Regex to match "Xray ... started" case-insensitively
-                            clearTimeout(timeoutId);
-                            testProcess.stdout.removeListener('data', onData); // Clean up listener
-                            resolve();
-                        }
-                    };
-                    testProcess.stdout.on('data', onData);
-                    testProcess.once('exit', (code, signal) => { // Handle early exit
-                        clearTimeout(timeoutId);
-                        testProcess.stdout.removeListener('data', onData);
-                        reject(new Error(`Xray exited prematurely with code ${code}, signal ${signal}`));
-                    });
-                });
-            } catch (startupError) {
-                console.error(`Xray startup error for config ${config.id} on port ${port}:`, startupError.message);
-                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: startupError.message });
-                // Cleanup is handled in the main finally block
-                return;
-            }
-
+        const result = await runXrayTest(config, settings, 'standard', port, async (agent, currentSettings) => {
             const startTime = Date.now();
-            const agent = new SocksProxyAgent(`socks5://127.0.0.1:${port}`);
-
-            const response = await axios.get(settings.testUrl, { httpAgent: agent, httpsAgent: agent, timeout: settings.testTimeout * 1000 });
+            const response = await axios.get(currentSettings.testUrl, {
+                httpAgent: agent, httpsAgent: agent, timeout: currentSettings.testTimeout * 1000
+            });
             if (response.status >= 200 && response.status < 300) {
-                mainWindow.webContents.send('test:result', { id: config.id, delay: Date.now() - startTime });
+                return { delay: Date.now() - startTime };
             } else {
-                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: `Status ${response.status}` });
+                return { delay: -1, error: `Status ${response.status}` };
             }
-        } catch (error) {
-            let errorMessage = 'Timeout'; // Default error message
-            if (error.code) {
-                errorMessage = error.code;
-            } else if (error.response && error.response.status) {
-                errorMessage = `Status ${error.response.status}`;
-            } else if (error.message) {
-                errorMessage = error.message;
-            }
-            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: errorMessage });
-        } finally {
-            if (testProcess && !testProcess.killed) {
-                testProcess.kill();
-            }
-            if (configPath) { // Only attempt to unlink if configPath was successfully created
-                fs.unlink(configPath, (err) => {
-                    if (err) console.error(`Failed to delete temp config '${configPath}':`, err);
-                });
-            }
-            activeTestProcesses.delete(config.id);
-            completedCount++;
-            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
+        });
+
+        if (result.success) {
+            mainWindow.webContents.send('test:result', { id: config.id, delay: result.delay, error: result.error, testType: 'standard' });
+        } else {
+            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: result.error, testType: 'standard' });
         }
+
+        completedCount++;
+        mainWindow.webContents.send('test:progress', { progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
     };
 
     const pool = new Set();
@@ -370,232 +477,126 @@ ipcMain.on('test:real-delay', async (event, { configs, settings }) => {
 
     const { realDelayTestUrl, realDelayTestPings, realDelayTestTimeout } = settings;
     let completedCount = 0;
-    let activeRealDelayTestProcesses = new Map(); // Similar to standard test
+    const totalToTest = configs.length;
+    mainWindow.webContents.send('test:progress', { progress: 0, total: totalToTest, completed: 0 });
 
     const runSingleRealDelayTest = async (config) => {
-        const testPort = 20000 + Math.floor(Math.random() * 40000); // Use a different port range to avoid conflict
-        const genConfigResponse = generateTempConfig(config.link, testPort);
+        const port = 21000 + Math.floor(Math.random() * 10000); // Port range for real delay tests
 
-        if (!genConfigResponse.success) {
-            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: genConfigResponse.error, testType: 'real-delay' });
-            completedCount++;
-            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
-            activeRealDelayTestProcesses.delete(config.id);
-            return;
-        }
-        const configPath = genConfigResponse.path;
-        let xrayProcess;
-
-        try {
-            xrayProcess = spawn(xrayPath, ['run', '-c', configPath]);
-            activeRealDelayTestProcesses.set(config.id, xrayProcess);
-
-            xrayProcess.on('error', (spawnError) => {
-                console.error(`Failed to start Xray for real delay test (config ${config.id}):`, spawnError);
-                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: `Xray start error: ${spawnError.message}`, testType: 'real-delay' });
-                return;
-            });
-
-            // Wait for Xray to signal it has started (similar to standard test)
-            const xrayStartTimeoutMs = settings.testTimeout > 5 ? (settings.testTimeout * 1000 / 2) : 5000; // Reuse standard test timeout for Xray startup
-            try {
-                await new Promise((resolve, reject) => {
-                    const timeoutId = setTimeout(() => reject(new Error('Xray startup timeout for real delay test')), xrayStartTimeoutMs);
-                    let outputBuffer = '';
-                    const onData = (data) => {
-                        outputBuffer += data.toString();
-                        if (/Xray.*started/i.test(outputBuffer)) {
-                            clearTimeout(timeoutId);
-                            xrayProcess.stdout.removeListener('data', onData);
-                            resolve();
-                        }
-                    };
-                    xrayProcess.stdout.on('data', onData);
-                    xrayProcess.once('exit', (code, signal) => {
-                        clearTimeout(timeoutId);
-                        xrayProcess.stdout.removeListener('data', onData);
-                        reject(new Error(`Xray exited prematurely (real delay test) with code ${code}, signal ${signal}`));
-                    });
-                });
-            } catch (startupError) {
-                console.error(`Xray startup error for real delay test (config ${config.id}):`, startupError.message);
-                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: startupError.message, testType: 'real-delay' });
-                return; // Handled in finally
-            }
-
-            const agent = new SocksProxyAgent(`socks5://127.0.0.1:${testPort}`);
+        const result = await runXrayTest(config, settings, 'real-delay', port, async (agent, currentSettings) => {
             let totalDelay = 0;
             let successfulPings = 0;
             let firstError = null;
 
-            for (let i = 0; i < realDelayTestPings; i++) {
+            for (let i = 0; i < currentSettings.realDelayTestPings; i++) {
                 const startTime = Date.now();
                 try {
-                    // Using HEAD request to minimize data transfer, focusing on connection + server response time
-                    await axios.head(realDelayTestUrl, { httpAgent: agent, httpsAgent: agent, timeout: realDelayTestTimeout });
+                    await axios.head(currentSettings.realDelayTestUrl, {
+                        httpAgent: agent, httpsAgent: agent, timeout: currentSettings.realDelayTestTimeout
+                    });
                     totalDelay += (Date.now() - startTime);
                     successfulPings++;
                 } catch (pingError) {
                     if (isDev) console.warn(`Real delay ping ${i + 1} failed for ${config.name}: ${pingError.message}`);
                     if (!firstError) firstError = pingError.message || 'Ping failed';
-                    // Optionally break here or continue trying all pings
-                    // break;
                 }
-                if (i < realDelayTestPings - 1) await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between pings
+                if (i < currentSettings.realDelayTestPings - 1) await new Promise(resolve => setTimeout(resolve, 100));
             }
 
             if (successfulPings > 0) {
-                const averageDelay = Math.round(totalDelay / successfulPings);
-                mainWindow.webContents.send('test:result', { id: config.id, delay: averageDelay, testType: 'real-delay' });
+                return { delay: Math.round(totalDelay / successfulPings) };
             } else {
-                mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: firstError || 'All pings failed', testType: 'real-delay' });
+                return { delay: -1, error: firstError || 'All pings failed' };
             }
+        });
 
-        } catch (error) { // Catch errors from the outer try (e.g. Xray startup promise rejection)
-            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: error.message || 'General error in real delay test', testType: 'real-delay' });
-        } finally {
-            if (xrayProcess && !xrayProcess.killed) {
-                xrayProcess.kill();
-            }
-            if (configPath) {
-                fs.unlink(configPath, (err) => {
-                    if (err) console.error(`Failed to delete temp config for real delay test '${configPath}':`, err);
-                });
-            }
-            activeRealDelayTestProcesses.delete(config.id);
-            completedCount++;
-            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
-            if (completedCount === configs.length) {
-                mainWindow.webContents.send('test:finish');
-                if(isDev) console.log("[Main] Real Delay Test sequence finished.");
-            }
+        if (result.success) {
+            mainWindow.webContents.send('test:result', { id: config.id, delay: result.delay, error: result.error, testType: 'real-delay' });
+        } else {
+            mainWindow.webContents.send('test:result', { id: config.id, delay: -1, error: result.error, testType: 'real-delay' });
+        }
+
+        completedCount++;
+        mainWindow.webContents.send('test:progress', { progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
+        if (completedCount === totalToTest) {
+            mainWindow.webContents.send('test:finish');
+            if(isDev) console.log("[Main] Real Delay Test sequence finished.");
         }
     };
 
-    // Basic sequential execution for now. Could be pooled like standard tests.
     (async () => {
         for (const config of configs) {
-            // Check if testing has been stopped (e.g., by user action)
-            // This requires a global flag or a way to check activeTestProcesses size,
-            // but this IPC handler runs to completion for the batch.
-            // For simplicity in Phase 2, we run all configs passed in the batch.
+            if (!isTesting()) { // Check if main testing flag was turned off (e.g. by stopAllTests)
+                console.log("[Main] Real delay test loop interrupted by stop signal.");
+                break;
+            }
             await runSingleRealDelayTest(config);
         }
     })();
 });
 
-// IPC Handler for Speed Test (Phase 1 - Basic Structure)
 ipcMain.on('test:speed', async (event, { configs, settings }) => {
     if (isDev) {
         console.log(`[Main] Received 'test:speed' for ${configs.length} configs.`);
         console.log('[Main] Speed Test Settings:', settings.speedTestFileUrl);
     }
-    const { speedTestFileUrl } = settings;
     let completedCount = 0;
-    let activeSpeedTestProcesses = new Map();
+    const totalToTest = configs.length;
+    mainWindow.webContents.send('test:progress', { progress: 0, total: totalToTest, completed: 0 });
 
     const runSingleSpeedTest = async (config) => {
-        const testPort = 30000 + Math.floor(Math.random() * 30000); // Yet another port range
-        const genConfigResponse = generateTempConfig(config.link, testPort);
+        const port = 31000 + Math.floor(Math.random() * 10000); // Port range for speed tests
 
-        if (!genConfigResponse.success) {
-            mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: genConfigResponse.error, testType: 'speed' });
-            // ... (progress update logic, similar to real-delay)
-            completedCount++;
-            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
-            activeSpeedTestProcesses.delete(config.id);
-            return;
-        }
-        const configPath = genConfigResponse.path;
-        let xrayProcess;
-
-        try {
-            xrayProcess = spawn(xrayPath, ['run', '-c', configPath]);
-            activeSpeedTestProcesses.set(config.id, xrayProcess);
-            xrayProcess.on('error', (spawnError) => {
-                console.error(`Failed to start Xray for speed test (config ${config.id}):`, spawnError);
-                mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: `Xray start error: ${spawnError.message}`, testType: 'speed' });
-                return;
-            });
-
-            // Wait for Xray to start
-            const xrayStartTimeoutMs = settings.testTimeout > 5 ? (settings.testTimeout * 1000 / 2) : 5000;
-            try {
-                await new Promise((resolve, reject) => {
-                    const timeoutId = setTimeout(() => reject(new Error('Xray startup timeout for speed test')), xrayStartTimeoutMs);
-                    let outputBuffer = '';
-                    const onData = (data) => {
-                        outputBuffer += data.toString();
-                        if (/Xray.*started/i.test(outputBuffer)) {
-                            clearTimeout(timeoutId);
-                            xrayProcess.stdout.removeListener('data', onData);
-                            resolve();
-                        }
-                    };
-                    xrayProcess.stdout.on('data', onData);
-                    xrayProcess.once('exit', (code, signal) => { /* ... error handling ... */ reject(new Error(`Xray exited prematurely (speed test) with code ${code}, signal ${signal}`)); });
-                });
-            } catch (startupError) {
-                console.error(`Xray startup error for speed test (config ${config.id}):`, startupError.message);
-                mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: startupError.message, testType: 'speed' });
-                return; // Handled in finally
-            }
-
-            const agent = new SocksProxyAgent(`socks5://127.0.0.1:${testPort}`);
+        const result = await runXrayTest(config, settings, 'speed', port, async (agent, currentSettings) => {
             const startTime = Date.now();
             let fileSize = 0;
             try {
-                const response = await axios.get(speedTestFileUrl, {
-                    httpAgent: agent,
-                    httpsAgent: agent,
-                    responseType: 'arraybuffer', // Important for getting content-length or measuring downloaded bytes
-                    timeout: settings.testTimeout * 1000 * 2, // Longer timeout for speed test (e.g., 2x standard test timeout)
+                const response = await axios.get(currentSettings.speedTestFileUrl, {
+                    httpAgent: agent, httpsAgent: agent,
+                    responseType: 'arraybuffer',
+                    timeout: currentSettings.testTimeout * 1000 * 2, // Longer timeout for speed test
                     onDownloadProgress: (progressEvent) => {
-                        if (progressEvent.total) {
-                            fileSize = progressEvent.total;
-                        } else if (progressEvent.loaded) {
-                             fileSize = progressEvent.loaded; // Fallback if Content-Length is not provided
-                        }
+                        if (progressEvent.total) fileSize = progressEvent.total;
+                        else if (progressEvent.loaded) fileSize = progressEvent.loaded;
                     }
                 });
-
                 const endTime = Date.now();
                 const durationSeconds = (endTime - startTime) / 1000;
-
-                if (!fileSize && response.data) { // If Content-Length was missing, use actual downloaded bytes
-                    fileSize = response.data.byteLength;
-                }
+                if (!fileSize && response.data) fileSize = response.data.byteLength;
 
                 if (durationSeconds > 0 && fileSize > 0) {
-                    const speedBps = (fileSize * 8) / durationSeconds; // Bits per second
-                    const speedMbps = (speedBps / (1024 * 1024)).toFixed(2); // Megabits per second
-                    mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: parseFloat(speedMbps), testType: 'speed' });
+                    const speedBps = (fileSize * 8) / durationSeconds;
+                    const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
+                    return { downloadSpeed: parseFloat(speedMbps) };
                 } else {
-                    throw new Error('Speed test failed: Invalid duration or file size.');
+                    throw new Error('Invalid duration or file size.');
                 }
-
             } catch (dlError) {
                 if (isDev) console.warn(`Speed test download failed for ${config.name}: ${dlError.message}`);
-                mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: dlError.message || 'Download failed', testType: 'speed' });
+                return { downloadSpeed: -1, error: dlError.message || 'Download failed' };
             }
+        });
 
-        } catch (error) {
-            mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: error.message || 'General error in speed test', testType: 'speed' });
-        } finally {
-            if (xrayProcess && !xrayProcess.killed) xrayProcess.kill();
-            if (configPath) fs.unlink(configPath, (err) => { if (err) console.error(`Failed to delete temp config for speed test '${configPath}':`, err); });
-            activeSpeedTestProcesses.delete(config.id);
-            completedCount++;
-            mainWindow.webContents.send('test:progress', { progress: (completedCount / configs.length) * 100, total: configs.length, completed: completedCount });
-            if (completedCount === configs.length) {
-                mainWindow.webContents.send('test:finish');
-                if(isDev) console.log("[Main] Speed Test sequence finished.");
-            }
+        if (result.success) {
+            mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: result.downloadSpeed, error: result.error, testType: 'speed' });
+        } else {
+            mainWindow.webContents.send('test:result', { id: config.id, downloadSpeed: -1, error: result.error, testType: 'speed' });
+        }
+
+        completedCount++;
+        mainWindow.webContents.send('test:progress', { progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
+        if (completedCount === totalToTest) {
+            mainWindow.webContents.send('test:finish');
+            if(isDev) console.log("[Main] Speed Test sequence finished.");
         }
     };
 
     (async () => {
         for (const config of configs) {
+            if (!isTesting()) {
+                console.log("[Main] Speed test loop interrupted by stop signal.");
+                break;
+            }
             await runSingleSpeedTest(config);
         }
     })();
@@ -860,7 +861,7 @@ function parseConfigLink(link, port) { // port argument is for the inbound SOCKS
                             fingerprint: fp || 'chrome', // Default fingerprint if not provided
                             shortId: sid || '',
                             publicKey: pbk || '', // publicKey is essential for REALITY
-                            // spiderX: url.searchParams.get('spiderX') || '/', // Example for other REALITY params
+                            spiderX: url.searchParams.get('spiderX') || '/',
                          };
                          // For REALITY, tlsSettings might not be strictly needed by Xray core if realitySettings is present and complete
                          // but some clients might still populate them. Keeping tlsSettings for now.
@@ -955,7 +956,7 @@ function parseConfigLink(link, port) { // port argument is for the inbound SOCKS
                            fingerprint: decodedVmessJson.fp || 'chrome',
                            shortId: decodedVmessJson.shortId,
                            publicKey: decodedVmessJson.publicKey,
-                           // spiderX: decodedVmessJson.spiderX || '/', // If applicable
+                           spiderX: decodedVmessJson.spiderX || '/',
                         };
                          outbound.streamSettings.security = 'reality'; // Explicitly set security to reality
                     }
