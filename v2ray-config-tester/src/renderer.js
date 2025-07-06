@@ -4,6 +4,9 @@
  * Description: Manages the entire user interface, state, and user interactions.
  */
 
+// Global or module-level variable to store isDev status
+let RENDERER_IS_DEV = false;
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- State Management ---
     const state = {
@@ -115,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_data_imported: "Data imported successfully!",
             toast_data_exported: "Data exported successfully!",
             toast_all_data_cleared: "All data cleared successfully.",
+            toast_tests_finished_type: "{type} tests finished!", // New
             toast_no_unhealthy_to_delete: "No unhealthy configs to delete.",
             toast_unhealthy_deleted: "{count} unhealthy configs deleted.",
             toast_sub_url_empty: "Subscription URL is empty.",
@@ -314,6 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
             toast_data_imported: "داده‌ها با موفقیت وارد شدند!",
             toast_data_exported: "داده‌ها با موفقیت صادر شدند!",
             toast_all_data_cleared: "تمام داده‌ها با موفقیت پاک شدند.",
+            toast_tests_finished_type: "تست‌های {type} تمام شدند!", // New
             toast_no_unhealthy_to_delete: "کانفیگ ناسالمی برای حذف وجود ندارد.",
             toast_unhealthy_deleted: "{count} کانفیگ ناسالم حذف شد.",
             toast_sub_url_empty: "آدرس URL اشتراک خالی است.",
@@ -478,6 +483,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialization ---
     const init = async () => {
         try {
+            // Fetch isDev status from main process first
+            try {
+                RENDERER_IS_DEV = await window.api.getIsDev();
+                if (RENDERER_IS_DEV) console.log("[Renderer] Running in Development mode.");
+            } catch (e) {
+                console.error("[Renderer] Failed to get isDev status from main. Defaulting to false.", e);
+                RENDERER_IS_DEV = false; // Default to false on error
+            }
+
             const initialData = await window.api.getAllData();
             Object.assign(state, initialData);
             // Ensure all configs have notes and isFavorite fields (for backward compatibility)
@@ -3179,25 +3193,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    window.api.onTestProgress(({ progress, total, completed }) => {
-        state.isTesting = progress < 100;
+    window.api.onTestProgress(({ testType, progress, total, completed }) => { // Added testType
+        state.isTesting = progress < 100; // This might need adjustment if multiple test types run
         const progressBar = $('#progressBar');
         const progressText = $('#progressText');
 
-        if(progressBar) progressBar.value = progress;
-        if(progressText) progressText.textContent = lang('testing_progress', { completed, total, progress: Math.round(progress) }); // Add lang key
+        if(progressBar) progressBar.value = progress; // Consider separate progress bars per type or a more generic one
+
+        // Update progress text more specifically if possible
+        let currentTestingType = testType || 'general'; // Fallback if testType is not provided
+        if(progressText) {
+            progressText.textContent = lang('testing_progress', {
+                type: currentTestingType, // Could add type to lang string: "Testing {type}: {completed}/{total}"
+                completed,
+                total,
+                progress: Math.round(progress)
+            });
+        }
 
         if (!state.isTesting && progress === 100) {
-             if(progressText) progressText.textContent = lang('test_complete_summary', { total, healthy: state.configs.filter(c => c.status === 'healthy').length }); // Add lang key
+             if(progressText) {
+                progressText.textContent = lang('test_complete_summary', {
+                    type: currentTestingType, // Could add type here too
+                    total,
+                    healthy: state.configs.filter(c => c.status === 'healthy').length
+                });
+             }
+             // Potentially show a toast specific to the completed test type
+             showToast(lang('toast_tests_finished_type', {type: lang('test_type_' + currentTestingType) || currentTestingType }), 'success');
         }
-        updateTestUI();
+        updateTestUI(); // Reflects isTesting state
     });
 
     window.api.onTestFinish((args) => {
         const testType = args ? args.testType : 'unknown';
-        if (isDev) console.log(`[Renderer] Test finish event received for type: ${testType}`);
+        if (RENDERER_IS_DEV) console.log(`[Renderer] Test finish event received for type: ${testType}`);
 
-        state.isTesting = false;
+        state.isTesting = false; // Reset general testing flag. More granular flags per test type might be needed if they can run truly independently.
 
         if (testType !== 'all_stopped') {
             state.lastTestCompletionTime = new Date().toISOString();

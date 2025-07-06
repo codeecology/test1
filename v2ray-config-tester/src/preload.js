@@ -37,4 +37,7 @@ contextBridge.exposeInMainWorld('api', {
 
     // Listen for menu actions
     onMenuAction: (callback) => ipcRenderer.on('menu-action', (_event, action) => callback(action)),
+
+    // Get app environment
+    getIsDev: () => ipcRenderer.invoke('app:get-is-dev'),
 });

@@ -446,7 +446,7 @@ ipcMain.on('test:start', (event, { configs, settings, groupId }) => {
     let completedCount = 0;
     const totalToTest = effectiveConfigsToTest.length;
 
-    mainWindow.webContents.send('test:progress', { progress: 0, total: totalToTest, completed: 0 });
+    mainWindow.webContents.send('test:progress', { testType: 'standard', progress: 0, total: totalToTest, completed: 0 });
 
     let queueForStandardTest = [...effectiveConfigsToTest];
 
@@ -475,7 +475,7 @@ ipcMain.on('test:start', (event, { configs, settings, groupId }) => {
         }
 
         completedCount++;
-        mainWindow.webContents.send('test:progress', { progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
+        mainWindow.webContents.send('test:progress', { testType: 'standard', progress: (completedCount / totalToTest) * 100, total: totalToTest, completed: completedCount });
     };
 
     const pool = new Set();
@@ -877,6 +877,11 @@ function disableSystemProxy() {
         });
     });
 }
+
+// IPC handler for isDev
+ipcMain.handle('app:get-is-dev', () => {
+    return isDev;
+});
 
 // --- Helper Functions ---
 function generateTempConfig(link, port, filename) {
