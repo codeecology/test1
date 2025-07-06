@@ -505,6 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.settings.columnVisibility) {
             state.settings.columnVisibility = {};
         }
+        // Iterate over object keys
         Object.keys(columnDefinitions).forEach(key => {
             if (state.settings.columnVisibility[key] === undefined) {
                 state.settings.columnVisibility[key] = columnDefinitions[key].defaultVisible;
@@ -513,18 +514,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!state.settings.columnOrder || !Array.isArray(state.settings.columnOrder) || state.settings.columnOrder.length !== defaultColumnOrder.length) {
             state.settings.columnOrder = [...defaultColumnOrder];
-        }
-        // Ensure all keys in columnOrder exist in columnDefinitions and vice-versa (for robustness if definitions change)
-        const currentKeys = Object.keys(columnDefinitions);
-        state.settings.columnOrder = state.settings.columnOrder.filter(key => currentKeys.includes(key));
-        currentKeys.forEach(key => {
-            if (!state.settings.columnOrder.includes(key)) {
-                // Add missing keys at the end, respecting their defaultOrder if possible, or just append
-                // This part can be complex if defaultOrder needs strict re-insertion. For now, just append.
-                state.settings.columnOrder.push(key);
-            }
-        });
+        } else {
+             // Ensure all keys in columnOrder exist in columnDefinitions and vice-versa
+            const currentKeysInDef = Object.keys(columnDefinitions);
+            state.settings.columnOrder = state.settings.columnOrder.filter(key => currentKeysInDef.includes(key));
 
+            currentKeysInDef.forEach(key => {
+                if (!state.settings.columnOrder.includes(key)) {
+                    // Add missing keys based on their defaultOrder to maintain some logical sequence
+                    // This is a simplified insertion; for perfect order preservation based on defaultOrder,
+                    // one might need to rebuild the order array more carefully.
+                    state.settings.columnOrder.push(key);
+                }
+            });
+            // Ensure order is a permutation of defaultColumnOrder keys
+             if (new Set(state.settings.columnOrder).size !== currentKeysInDef.length) {
+                state.settings.columnOrder = [...defaultColumnOrder]; // Fallback to default if inconsistent
+            }
+        }
     };
 
     const populateColumnVisibilitySettings = () => {
@@ -532,21 +539,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!container) return;
         container.innerHTML = ''; // Clear old checkboxes
 
-        initializeColumnVisibility(); // Ensure defaults are set (call uses new name)
+        initializeColumnVisibility(); // Ensure defaults are set
 
-        columnDefinitions.forEach(col => {
+        // Iterate over the defined order for UI consistency
+        defaultColumnOrder.forEach(key => {
+            const col = columnDefinitions[key];
             const div = document.createElement('div');
             div.className = 'checkbox-group';
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
-            checkbox.id = `col-toggle-${col.key}`;
-            checkbox.dataset.columnKey = col.key;
-            checkbox.checked = state.settings.columnVisibility[col.key];
+            checkbox.id = `col-toggle-${key}`;
+            checkbox.dataset.columnKey = key;
+            checkbox.checked = state.settings.columnVisibility[key];
 
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
-            label.textContent = lang(col.langKey) || col.key.charAt(0).toUpperCase() + col.key.slice(1);
+            label.textContent = lang(col.langKey) || key.charAt(0).toUpperCase() + key.slice(1);
 
             div.appendChild(checkbox);
             div.appendChild(label);
@@ -563,33 +572,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const bodyRows = table.querySelectorAll('tbody tr');
 
         // Checkbox column (index 0) is always visible
-        if (headerRow) headerRow.cells[0].style.display = '';
+        if (headerRow) headerRow.cells[0].style.display = ''; // Checkbox column is always index 0
         bodyRows.forEach(row => { if(row.cells[0]) row.cells[0].style.display = ''; });
 
-        columnDefinitions.forEach(colDef => {
-            const visible = state.settings.columnVisibility[colDef.key];
-            if (headerRow && headerRow.cells[colDef.index]) {
-                headerRow.cells[colDef.index].style.display = visible ? '' : 'none';
+        let visibleColumnCount = 1; // For the checkbox column
+
+        // Iterate using the defaultColumnOrder to ensure we process based on original HTML structure's indices
+        defaultColumnOrder.forEach(key => {
+            const colDef = columnDefinitions[key];
+            const isVisible = state.settings.columnVisibility[key];
+            const actualCellIndex = colDef.defaultOrder + 1; // +1 for checkbox col
+
+            if (isVisible) {
+                visibleColumnCount++;
+            }
+
+            if (headerRow && headerRow.cells[actualCellIndex]) {
+                headerRow.cells[actualCellIndex].style.display = isVisible ? '' : 'none';
             }
             bodyRows.forEach(row => {
-                // Check if it's a config data row, not the "empty table" message row
-                if (row.dataset.id && row.cells[colDef.index]) {
-                    row.cells[colDef.index].style.display = visible ? '' : 'none';
+                if (row.dataset.id && row.cells[actualCellIndex]) { // Ensure it's a data row
+                    row.cells[actualCellIndex].style.display = isVisible ? '' : 'none';
                 }
             });
         });
-        // Adjust colspan for "empty table" message row if it exists
+
         const emptyRow = table.querySelector('tbody tr td[colspan]');
         if (emptyRow) {
-            const visibleColumnCount = 1 + columnDefinitions.filter(cd => state.settings.columnVisibility[cd.key]).length;
             emptyRow.setAttribute('colspan', visibleColumnCount.toString());
         }
+        // Note: This function now correctly handles VISIBILITY based on original cell indices.
+        // Actual visual REORDERING of columns needs to be done in renderTable by changing
+        // the order in which <td> elements are appended/updated.
     };
 
 
     // --- Render Functions ---
     const renderAll = () => {
-        applyColumnVisibility(); // Apply visibility before rendering table
+        initializeColumnSettings();
+        applyColumnVisibility();
         renderTable();
         renderGroups();
         updateStatusBar();
@@ -1827,12 +1848,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Column Visibility settings
         let columnVisibilityChanged = false;
-        columnDefinitions.forEach(col => {
-            const checkbox = $(`#col-toggle-${col.key}`);
+        Object.keys(columnDefinitions).forEach(key => { // Iterate over object keys
+            const checkbox = $(`#col-toggle-${key}`);
             if (checkbox) {
                 const isVisible = checkbox.checked;
-                if (state.settings.columnVisibility[col.key] !== isVisible) {
-                    state.settings.columnVisibility[col.key] = isVisible;
+                if (state.settings.columnVisibility[key] !== isVisible) {
+                    state.settings.columnVisibility[key] = isVisible;
                     columnVisibilityChanged = true;
                 }
             }
